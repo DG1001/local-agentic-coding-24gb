@@ -396,11 +396,11 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Three models, 128 tool calls, six identical runs per configuration. Every model
+    <p class="standfirst">Six models, 202 tool calls, six identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
-    macOS ever gave, and ten confident conclusions I had to retract.</p>
+    macOS ever gave, and eleven confident conclusions I had to retract.</p>
 
     <div class="factstrip">
       <div>Machine<b>Apple M5 Pro · 15 cores</b></div>
@@ -556,14 +556,17 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
     <div class="tablewrap">
       <table>
         <caption>Same repair task, same harness, same sampling. Devstral could only run here after
-        switching it from MLX to GGUF — see Finding 4.</caption>
+        switching it from MLX to GGUF — see Finding 6.</caption>
         <thead>
           <tr><th>Model</th><th>Runtime</th><th class="num">Verified</th><th class="num">Median time</th><th class="num">Schema errors</th><th class="num">Wired peak</th></tr>
         </thead>
         <tbody>
           <tr><th>gpt-oss-20b MXFP4</th><td>MLX</td><td class="num"><span class="pill ok">6 / 6</span></td><td class="num">55 s</td><td class="num">1 / 41</td><td class="num">16.1 GB · 67 %</td></tr>
+          <tr><th><strong>Qwen3.5-9B 4-bit</strong></th><td>MLX</td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">57 s</td><td class="num">0 / 28</td><td class="num"><strong>9.4 GB · 39 %</strong></td></tr>
+          <tr><th>Gemma 4 12B Q4_K_M</th><td>llama.cpp</td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">156 s</td><td class="num">0 / 30</td><td class="num">12.3 GB · 51 %</td></tr>
           <tr><th>Devstral-Small-2-24B IQ4_XS</th><td>llama.cpp</td><td class="num"><span class="pill ok">2 / 2</span></td><td class="num">132 s</td><td class="num">0 / 12</td><td class="num">—</td></tr>
           <tr><th>Qwen3.6-35B-A3B 3-bit</th><td>MLX</td><td class="num"><span class="pill mid">3 / 4</span></td><td class="num">177 s</td><td class="num">0 / 31</td><td class="num"><strong>20.2 GB · 84 %</strong></td></tr>
+          <tr><th>Gemma 4 12B MLX-4bit</th><td>MLX</td><td class="num"><span class="pill bad">0 / 6</span></td><td class="num">—</td><td class="num">0 / 16</td><td class="num">engine defect, see Finding 6</td></tr>
         </tbody>
       </table>
     </div>
@@ -609,10 +612,10 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
 
   <section id="quant">
     <div class="col">
-      <h2><span class="num">Finding 2</span>One malformed tool call in 128</h2>
+      <h2><span class="num">Finding 2</span>One malformed tool call in 202</h2>
       <p>The question that started this investigation was whether 3-bit quantisation was corrupting tool
-      arguments. Across the whole study — three models, three prompt sizes, two sampling regimes, plus
-      the repair task — <strong>128 tool calls produced exactly one schema failure</strong>: a
+      arguments. Across the whole study — six models, three prompt sizes, two sampling regimes, plus
+      the repair task — <strong>202 tool calls produced exactly one schema failure</strong>: a
       <code>write</code> with a completely empty arguments object. The agent recovered on the next step
       and the run still went green.</p>
       <p>The harness validated this itself rather than trusting the agent framework, declaring the JSON
@@ -785,9 +788,76 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
     </div>
   </section>
 
+  <section id="engine">
+    <div class="col">
+      <h2><span class="num">Finding 5</span>The smallest model nearly wins</h2>
+      <p><code>Qwen3.5-9B</code> is the surprise of the series. At <strong>half the weights of
+      gpt-oss</strong> it matches its speed, trails its reliability by one run, and needs
+      <strong>39 % of memory instead of 67 %</strong>. A 9B of the newer generation beats a 35B of the
+      previous one decisively, at a fifth of the footprint.</p>
+      <p>Its one failure is benign in shape: run 3 stopped after 4 seconds with a single tool call and
+      107 reasoning tokens. It ran the tests once and gave up. No loop, no token limit, no degenerate
+      output — a fresh session would have fixed it. That is a different animal from the Qwen MoE's
+      failures, which were expensive and could not be aborted.</p>
+      <p>Note the context, too: LM Studio granted it <strong>92,672 tokens</strong> unprompted, because
+      hybrid attention makes the KV cache cheap. Devstral got 4,864 on the same machine.</p>
+      <p>Which inverts the question this investigation started with. It began as "which large model
+      still fits" and ends at <strong>"which smallest model does the job reliably"</strong> — because on
+      this machine, memory headroom converts directly into stability.</p>
+    </div>
+  </section>
+
+  <section id="engine2">
+    <div class="col">
+      <h2><span class="num">Finding 6</span>The engine decides usability, not just speed</h2>
+      <p>Three times in one day, switching from MLX to llama.cpp turned a model from unusable into
+      working. Every time, the failure looked like a model failure in the log.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Same weights, same machine, same day — only the inference engine differs</caption>
+        <thead><tr><th>Model</th><th>Under MLX</th><th>Under GGUF</th></tr></thead>
+        <tbody>
+          <tr><th>Devstral-Small-2-24B</th><td>context silently capped at 4,864</td><td>16,384 as requested</td></tr>
+          <tr><th>Qwen3.6-27B</th><td>guardrail refuses to load at all</td><td>loads at full context</td></tr>
+          <tr><th>Gemma 4 12B</th><td><span class="pill bad">0 / 6</span> — channel-marker loop</td><td><span class="pill ok">5 / 6</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>The Gemma case is the cleanest, because the same model ran the same task through the same
+      harness with the same sampling — the engine was the only variable.</p>
+      <p>Under LM Studio's MLX path, Gemma's channel markers leak into <code>content</code> as raw text:</p>
+<pre><code>&lt;|channel&gt;thought
+&lt;channel|&gt;</code></pre>
+      <p>It starts at 28 characters. After the step that reads <code>duration.py</code>, generation
+      degenerates into nothing but markers — <strong>49,258 characters, 8,191 tokens, length stop</strong>
+      — in two independent runs at exactly the same point. <code>reasoning_tokens</code> read 0 throughout.</p>
+      <p>My first explanation was a feedback loop: the harness writes content back as an assistant
+      message, the model sees its own broken markers and produces more. The control experiment refuted
+      it — with markers stripped (cleaned content: 0 characters at every step) it broke at the same
+      place again. The loop is generated fresh, not fed back.</p>
+      <p>Under llama.cpp the problem vanishes completely: not a single marker, and
+      <code>reasoning_tokens</code> lands between 225 and 2,797. What is correctly recognised and
+      separated as reasoning there is the garbage that blows up the output under MLX — two sides of the
+      same thing.</p>
+
+      <div class="callout warn">
+        <div class="label">The cost is speed</div>
+        <p>llama.cpp does not use the M5's neural accelerators and runs roughly 2.4× behind MLX. Gemma
+        needs a 156 s median under GGUF against 55 s for gpt-oss under MLX, with heavy variance: four
+        clean runs between 146 and 164 seconds, plus one outlier at 1,226 seconds.</p>
+        <p>For models that run cleanly under MLX, MLX stays the better choice. But when a model behaves
+        strangely, switching the engine is the <em>first</em> test, not the last.</p>
+      </div>
+    </div>
+  </section>
+
   <section id="memory">
     <div class="col">
-      <h2><span class="num">Finding 5</span>Wired memory is a step function, and pressure monitoring cannot see it</h2>
+      <h2><span class="num">Finding 7</span>Wired memory is a step function, and pressure monitoring cannot see it</h2>
       <p>MLX loads safetensors via <code>mmap</code>. At idle those pages are file-backed — active or
       inactive, not wired. The moment inference starts the GPU wires them, and wired memory jumps to a
       plateau in under two seconds. Sampling <code>memory_pressure</code> every two seconds through one
@@ -849,7 +919,7 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
 
   <section id="streaming">
     <div class="col">
-      <h2><span class="num">Finding 6</span>You can trade the whole memory problem away — for latency</h2>
+      <h2><span class="num">Finding 8</span>You can trade the whole memory problem away — for latency</h2>
       <p>Everything above fights for headroom inside 24 GB. <a href="https://github.com/drumih/turbo-fieldfare">TurboFieldfare</a>
       sidesteps the fight entirely: a Swift and Metal runtime, no MLX and no llama.cpp, written for one
       model — Gemma 4 26B-A4B. It keeps a 1.35 GB shared core resident and <strong>streams each token's
@@ -873,7 +943,7 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
 
     <div class="col">
       <p>A 26-billion-parameter model at 24 % of physical memory. The entire band where the kernel bug in
-      Finding 7 lives — and where this machine's desktop started flickering — simply is not reachable
+      Finding 9 lives — and where this machine's desktop started flickering — simply is not reachable
       any more. Prompt-prefix reuse works too: 12,642 of 20,087 prompt tokens were served from cache
       across the series, and the server reports it honestly in
       <code>usage.prompt_tokens_details.cached_tokens</code>.</p>
@@ -910,7 +980,7 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
 
   <section id="panic">
     <div class="col">
-      <h2><span class="num">Finding 7</span>The kernel panic is an unresolved Apple bug, not an MLX one</h2>
+      <h2><span class="num">Finding 9</span>The kernel panic is an unresolved Apple bug, not an MLX one</h2>
       <p>Mid-session, the machine went down hard:</p>
 <pre><code>panic(cpu 12 caller 0xfffffe0050784280):
 "pending memory object unexpectedly found in non pending hash"
@@ -979,7 +1049,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
 
   <section id="worse">
     <div class="col">
-      <h2><span class="num">Finding 8</span>Three fixes that made things measurably worse</h2>
+      <h2><span class="num">Finding 10</span>Three fixes that made things measurably worse</h2>
       <p>All three seemed obviously right. They are here because I measured them.</p>
     </div>
 
@@ -1019,7 +1089,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
 
   <section id="gotchas">
     <div class="col">
-      <h2><span class="num">Finding 9</span>Tooling behaviour that will cost you an hour each</h2>
+      <h2><span class="num">Finding 11</span>Tooling behaviour that will cost you an hour each</h2>
 
       <h3>LM Studio</h3>
       <ul>
