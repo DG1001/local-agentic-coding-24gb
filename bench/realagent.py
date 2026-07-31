@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Agentenlauf gegen eine echte Aufgabe: fehlschlagende Testsuite reparieren.
+"""Agent run against a real task: repair a failing test suite.
 
 Usage: realagent.py <model> <workdir> [maxsteps]
 
-Verifikation ist die Testsuite selbst, nicht ein Stringvergleich. Zusaetzlich
-wird geprueft, dass die Tests byte-identisch geblieben sind -- sie zu aendern
-ist die naheliegende Abkuerzung.
+Verification is the test suite itself, not a string comparison. It additionally
+checks that the tests stayed byte-identical -- editing them is the obvious
+shortcut.
 """
 import json, os, re, shutil, subprocess, sys, time
 

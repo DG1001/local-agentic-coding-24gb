@@ -1,5 +1,5 @@
 {
-  "_comment": "Rohzahlen der Messreihe vom 30./31. Juli 2026. Eine Maschine, ein Tag. Sechs Laeufe pro Konfiguration, ausser wo anders vermerkt.",
+  "_comment": "Raw numbers from the 30/31 July 2026 series. One machine, one day. Six runs per configuration unless noted otherwise.",
   "machine": {
     "model": "Apple M5 Pro",
     "cores": 15,
@@ -18,10 +18,10 @@
     "top_p": 0.95,
     "top_k": 20,
     "repetition_penalty": 1.05,
-    "note": "Qwens dokumentierte Empfehlung fuer Thinking-Modus. Fuer die 'broken'-Reihe: temperature 0.3 ohne top_p/top_k."
+    "note": "Qwen's documented recommendation for thinking mode. For the 'broken' series: temperature 0.3 without top_p/top_k."
   },
   "synthetic_task": {
-    "_comment": "greet.py schreiben, ausfuehren, verifizieren. small = 245 prompt tokens, large = ~5600.",
+    "_comment": "write greet.py, run it, verify. small = 245 prompt tokens, large = ~5600.",
     "gpt-oss-20b-MXFP4": {
       "runtime": "MLX",
       "weights_gb": 12.08,
@@ -95,7 +95,7 @@
     }
   },
   "repair_task": {
-    "_comment": "ISO-8601-Parser, 22 Tests, 7 rot, drei unabhaengige Fehler. Verifikation ueber die Testsuite; zusaetzlich geprueft ob test_duration.py byte-identisch blieb.",
+    "_comment": "ISO-8601 parser, 22 tests, 7 failing, three independent bugs. Verified through the test suite; additionally checks that test_duration.py stayed byte-identical.",
     "baseline": "15/22 passing",
     "gpt-oss-20b-MXFP4": {
       "runtime": "MLX",
@@ -448,7 +448,7 @@
     }
   },
   "wired_memory_trace": {
-    "_comment": "memory_pressure alle 2s waehrend einer 1200-Token-Generierung, Qwen3.6-35B-A3B bei 32k. Werte in GB.",
+    "_comment": "memory_pressure every 2s through a 1200-token generation, Qwen3.6-35B-A3B at 32k. Values in GB.",
     "samples_gb": [
       2.24,
       19.26,
@@ -493,7 +493,7 @@
     ]
   },
   "context_ceilings": {
-    "_comment": "Was LM Studio tatsaechlich geladen hat, gegen das Angeforderte.",
+    "_comment": "What LM Studio actually loaded, against what was requested.",
     "Devstral-MLX-MXFP4": {
       "requested": [
         16384,
@@ -523,7 +523,7 @@
     }
   },
   "engine_matters": {
-    "_comment": "Drei Modelle, bei denen die Wahl der Inferenz-Engine ueber Brauchbarkeit entschied. Jedes Mal sah der Fehler im Log wie Modellversagen aus.",
+    "_comment": "Three models where the choice of inference engine decided usability. Every time, the failure looked like a model failure in the log.",
     "Devstral-Small-2-24B": {
       "mlx": "Kontext auf 4864 gedeckelt",
       "gguf": "16384 wie angefordert",

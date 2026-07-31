@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Minimales Agent-Harness. Validiert Toolcall-Argumente selbst gegen das
-deklarierte Schema -- das ist die eigentliche Fehlermessung.
+"""Minimal agent harness. Validates tool-call arguments against the declared
+schema itself -- that is the actual error measurement.
 
-Konfiguration ueber Umgebungsvariablen:
+Configuration through environment variables:
   LLM_URL, MAX_TOK, TEMP, TOP_P, TOP_K, REP_PEN
 """
 import json, os, subprocess, sys, urllib.request
@@ -49,7 +49,7 @@ def build_payload(model, msgs):
 
 
 def run_tool(name, args, workdir, stats):
-    """Fuehrt Tool aus, nachdem das Schema geprueft wurde."""
+    """Runs the tool after validating its arguments against the schema."""
     spec = next(t["function"] for t in TOOLS if t["function"]["name"] == name)
     missing = [k for k in spec["parameters"]["required"] if k not in args]
     if missing:

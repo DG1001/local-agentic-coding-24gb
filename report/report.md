@@ -1,415 +1,370 @@
-# Lokales agentisches Coding auf einem 24-GB-Mac: der Systemprompt ist der Benchmark
+# Local agentic coding on a 24 GB Mac: the system prompt is the benchmark
 
-*Feldnotizen — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
+*Field notes — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Sechs Modelle, 202 Toolcalls, sechs identische Läufe pro Konfiguration. Jedes Modell
-löste die Aufgabe isoliert. Getrennt hat sie ein Systemprompt von fünftausend Token —
-das, was jeder echte Coding-Agent mitschickt. Unterwegs: ein Kernel-Panic, ein
-flackernder Bildschirm als einzige Warnung, die macOS je gab, und zehn Schlussfolgerungen,
-die ich zurückziehen musste.
+Six models, 202 tool calls, six identical runs per configuration. Every model aced the
+task in isolation. What separated them was a five-thousand-token system prompt — the
+thing every real coding agent sends. Along the way: one kernel panic, a flickering
+desktop as the only warning macOS ever gave, and eleven confident conclusions I had to
+retract.
 
-> Die formatierte Fassung mit interaktivem Diagramm liegt in [`report.html`](report.html).
-> Rohzahlen: [`../results/measurements.json`](../results/measurements.json).
+> The formatted version with an interactive chart is in [`report.html`](report.html).
+> Raw numbers: [`../results/measurements.json`](../results/measurements.json).
 
 ---
 
-## Das Ergebnis
+## The result
 
-Aufgabe durchgehend identisch: `greet.py` mit einer `greet(name)`-Funktion schreiben, mit
-`python3` ausführen, Ausgabe verifizieren, bei Fehler korrigieren. Zwei Werkzeuge,
-`bash` und `write`. Sechs Läufe pro Konfiguration, Erfolg gemessen, indem die
-entstandene Datei importiert und die Funktion aufgerufen wird.
+The task was identical throughout: write `greet.py` with a `greet(name)` function, run it
+with `python3`, verify the output, fix it if wrong. Two tools available, `bash` and
+`write`. Six runs per configuration, success measured by actually importing the resulting
+file and calling the function.
 
-Die einzige Variable, die zählte, war die Menge Systemprompt davor.
+The only variable that mattered was how much system prompt sat in front of that task.
 
-| Modell | Auf Platte | Kurzer Prompt | Agenten-Prompt | + kaputtes Sampling |
+| Model | On disk | Small prompt | Agent prompt | + broken sampling |
 |---|---:|---:|---:|---:|
-| gpt-oss-20b MXFP4 | 12,08 GB | 6/6 | **6/6** | **6/6** |
-| Qwen3.5-9B 4-bit | 5,95 GB | — | — | — |
-| Devstral-Small-2-24B MXFP4 | 14,39 GB | 6/6 | passt nicht | — |
-| Qwen3.6-35B-A3B MLX 3-bit | 15,20 GB | 6/6 | 3/6 | 0/6 |
+| gpt-oss-20b MXFP4 | 12.08 GB | 6/6 | **6/6** | **6/6** |
+| Devstral-Small-2-24B MXFP4 | 14.39 GB | 6/6 | won't fit | — |
+| Qwen3.6-35B-A3B MLX 3-bit | 15.20 GB | 6/6 | 3/6 | 0/6 |
 
-„Kurz" ist ein Ein-Satz-Systemprompt (245 Prompt-Token), „Agenten-Prompt" sind rund
-5.600 Token plausibler Instruktionen — die Größenordnung, die OpenCode, aider und crush
-tatsächlich senden.
+"Small" is a one-sentence system prompt (245 prompt tokens); "agent prompt" is ~5,600
+tokens of plausible instructions — the size OpenCode, aider and crush actually send.
 
-Liest man nur die erste Spalte, sieht jedes Modell brauchbar aus: 9 bis 12 Sekunden pro
-Aufgabe, kein einziger fehlerhafter Toolcall, nichts zu entscheiden. Liest man die
-letzten beiden, steht nur noch gpt-oss.
+Read the first column and every model looks fine: 9 to 12 seconds per task, not one
+malformed tool call, nothing to choose between them. Read the last two and only gpt-oss
+is still standing.
 
-**Deshalb sind „läuft bei mir"-Berichte über lokale Coding-Modelle so unzuverlässig.**
-Ein schneller Handtest nutzt einen kurzen Prompt. Ein Agent nicht.
+**This is why "it works on my machine" reports about local coding models are so
+unreliable.** A quick manual test uses a short prompt. An agent does not.
 
-### Die Konfiguration, falls du nur die willst
+### The configuration, if that is all you want
 
 ```
-model              gpt-oss-20b MXFP4        (12,08 GB)
+model              gpt-oss-20b MXFP4        (12.08 GB)
 context            32768
-temperature        0.6      // siehe Befund 3 — möglicherweise egal
+temperature        0.6      // see Finding 3 — may not matter
 top_p              0.95
 top_k              20
 repetition_penalty 1.05
-tool_choice        "auto"   // NIEMALS "required"
-max_tokens         8192     // Completions erreichen ~2400
-iogpu.wired_limit_mb  auf 0 lassen
+tool_choice        "auto"   // NEVER "required"
+max_tokens         8192     // completions reach ~2400
+iogpu.wired_limit_mb  leave at 0
 ```
 
-Gemessen: 6/6 unter realistischem Agenten-Prompt, Median 16,4 s, 16,11 GB Wired (67 %),
-lädt in 6,1 Sekunden. End-to-end in OpenCodes interaktiver TUI bestätigt, die daraus eine
-funktionierende Todo-App aus drei Dateien gebaut hat.
+Measured: 6/6 under a realistic agent prompt, 16.4 s median, 16.11 GB wired (67 %), loads
+in 6.1 seconds. Confirmed end-to-end in OpenCode's interactive TUI, which built a working
+three-file todo app from a single instruction.
 
 ---
 
-## Befund 1 — Es trägt auch bei echter Arbeit
+## Finding 1 — It holds up on real work
 
-Alles bisherige nutzt eine bewusst winzige Aufgabe, was weniger beweist, als es aussieht.
-Der letzte Test war deshalb eine kleine, aber echte Reparatur: ein bestehendes
-ISO-8601-Modul mit 100 Zeilen und einer 22-Test-Suite, sieben davon rot, verursacht durch
-**drei unabhängige Fehler** an verschiedenen Stellen — ein fehlendes Feature
-(Wochen-Designatoren fehlen in Regex *und* Einheitentabelle), ein Absturz (`int()` auf
-Bruchzahlen) und ein Logikfehler (Vorzeichen erfasst, nie angewandt). Auftrag: Suite grün
-bekommen, Tests nicht anfassen.
+Everything above uses a deliberately tiny task, which proves less than it looks like. So
+the last test was a small but genuine repair job: an existing 100-line ISO-8601 duration
+module with a 22-test suite, seven of them failing, from **three independent bugs** in
+different places — a missing feature (week designators absent from both the regex and the
+unit table), a crash (`int()` on fractional values), and a logic error (the sign captured
+but never applied). Instruction: make the suite pass, do not touch the tests.
 
-| Lauf | Schritte | bash | write | Schema-Fehler | Reasoning | Ergebnis | Dauer |
+| Run | Steps | bash | write | Schema errors | Reasoning | Result | Wall |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 10 | 7 | 2 | 1 | 1.548 | 22/22 | 63,7 s |
-| 2 | 9 | 7 | 1 | 0 | 1.967 | 22/22 | 53,9 s |
-| 3 | 7 | 5 | 1 | 0 | 719 | 22/22 | 37,1 s |
-| 4 | 8 | 6 | 1 | 0 | 2.605 | 22/22 | 63,0 s |
-| 5 | 5 | 3 | 1 | 0 | 556 | 22/22 | 27,8 s |
-| 6 | 8 | 6 | 1 | 0 | 2.131 | 22/22 | 56,0 s |
+| 1 | 10 | 7 | 2 | 1 | 1,548 | 22/22 | 63.7 s |
+| 2 | 9 | 7 | 1 | 0 | 1,967 | 22/22 | 53.9 s |
+| 3 | 7 | 5 | 1 | 0 | 719 | 22/22 | 37.1 s |
+| 4 | 8 | 6 | 1 | 0 | 2,605 | 22/22 | 63.0 s |
+| 5 | 5 | 3 | 1 | 0 | 556 | 22/22 | 27.8 s |
+| 6 | 8 | 6 | 1 | 0 | 2,131 | 22/22 | 56.0 s |
 
-**Sechs von sechs, Median 55 Sekunden.** Alle drei Fehler jedes Mal in einem Durchgang
-gefunden. Die Tests blieben unverändert — was ausdrücklich geprüft wird, weil die
-Testsuite zu ändern die naheliegende Abkürzung ist und Modelle sie nehmen.
+**Six for six, median 55 seconds.** All three bugs found and fixed in a single pass each
+time. The tests were never modified — worth checking explicitly, because editing the test
+suite is the obvious shortcut and models take it.
 
-Der Patch liest sich wie von Hand geschrieben: die Wochengruppe an der grammatisch
-richtigen Stelle eingefügt (vor dem `T`-Trenner, wo ISO-8601 sie vorsieht), `int()` zu
-`float()` geändert **und** der Akkumulator auf `0.0` initialisiert — der zweite Teil ist
-der, den man leicht übersieht — plus vier Zeilen für das Vorzeichen nach der Summenbildung.
-Keine erfundenen Features, keine überflüssigen Umbauten.
+The patch reads like something a person would write: the week group inserted at the
+correct grammatical position (before the `T` separator, where ISO-8601 puts it), `int()`
+changed to `float()` **and** the accumulator initialised to `0.0` — the second half being
+the part that is easy to miss — plus four lines applying the sign after summation. No
+invented features, no gratuitous restructuring.
 
-Dieselbe Aufgabe für die anderen Modelle:
+The same task for the other models:
 
-| Modell | Gewichte | Engine | Erfolg | Median | Schema-Fehler | Wired |
+| Model | Weights | Engine | Verified | Median | Schema errors | Wired |
 |---|---:|---|---:|---:|---:|---:|
-| gpt-oss-20b MXFP4 | 12,08 GB | MLX | **6/6** | 55 s | 1/41 | 16,1 GB · 67 % |
-| **Qwen3.5-9B 4-bit** | **5,95 GB** | MLX | **5/6** | **57 s** | 0/28 | **9,4 GB · 39 %** |
-| Gemma 4 12B Q4_K_M | 7,38 GB | llama.cpp | 5/6 | 156 s | 0/30 | 12,3 GB · 51 % |
-| Devstral-Small-2-24B IQ4_XS | 12,76 GB | llama.cpp | 2/2 | 132 s | 0/12 | — |
-| Qwen3.6-35B-A3B 3-bit | 15,20 GB | MLX | 3/4 | 177 s | 0/31 | **20,2 GB · 84 %** |
-| Gemma 4 12B MLX-4bit | 6,74 GB | **MLX** | **0/6** | — | 0/16 | Engine defekt, s. Befund 5 |
+| gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6** | 55 s | 1/41 | 16.1 GB · 67 % |
+| **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6** | **57 s** | 0/28 | **9.4 GB · 39 %** |
+| Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6 | 156 s | 0/30 | 12.3 GB · 51 % |
+| Devstral-Small-2-24B IQ4_XS | 12.76 GB | llama.cpp | 2/2 | 132 s | 0/12 | — |
+| Qwen3.6-35B-A3B 3-bit | 15.20 GB | MLX | 3/4 | 177 s | 0/31 | **20.2 GB · 84 %** |
+| Gemma 4 12B MLX-4bit | 6.74 GB | MLX | **0/6** | — | 0/16 | engine defect, see Finding 6 |
 
-gpt-oss gewinnt auf allen drei Achsen zugleich: zuverlässiger, dreimal schneller, 17
-Prozentpunkte mehr Speicherreserve. Das Qwen-MoE ist trotz nur 3B aktiver von 35B
-Parametern das langsamste — seine Fehlschläge sind teuer, ein schlechter Lauf verbrannte
-8.211 Reasoning-Tokens ohne Ergebnis.
+The Qwen MoE is the slowest despite activating only 3B of its 35B parameters — its
+failures are expensive, and its one bad run burned 8,211 reasoning tokens going nowhere.
 
-Die Streuung ist erheblich: Lauf 5 kam mit 4 Toolcalls und 556 Reasoning-Tokens aus,
-Lauf 4 brauchte 2.605. Faktor 4,7 bei identischer Aufgabe. Einzelne Läufe sagen wenig.
+Variance is substantial: gpt-oss run 5 finished in 4 tool calls and 556 reasoning tokens,
+run 4 needed 2,605. A factor of 4.7 on an identical task. Single runs tell you little.
 
-### Das kleinste Modell gewinnt fast
+### Turning off reasoning does not help
 
-Qwen3.5-9B ist das überraschendste Ergebnis der Reihe. Bei **halber Gewichtsgröße** von
-gpt-oss liegt es bei gleicher Geschwindigkeit, einen Lauf hinter dessen Zuverlässigkeit —
-und braucht **39 % statt 67 %** des Speichers. Ein 9B der neueren Generation schlägt ein
-35B der vorherigen deutlich, bei einem Fünftel des Speichers.
+An obvious idea, since Devstral solves this task with `reasoning_tokens: 0`: disable
+thinking on the Qwen MoE and skip the loop entirely.
 
-Der eine Fehlschlag ist gutartig gebaut: Lauf 3 brach nach 4 Sekunden mit einem einzigen
-Toolcall und 107 Reasoning-Token ab — es führte die Tests einmal aus und hörte auf. Kein
-Schleifen, kein Token-Limit, keine degenerierte Ausgabe. Eine neue Session hätte gereicht.
-Das unterscheidet sich grundlegend von den Fehlschlägen des Qwen-MoE, die teuer waren und
-sich nicht abbrechen ließen.
-
-Bemerkenswert ist auch der Kontext: LM Studio vergab von sich aus **92.672 Token**, weil
-die hybride Attention die KV-Cache billig macht. Devstral bekam auf derselben Maschine
-4.864.
-
-Damit hat sich die Fragestellung der Untersuchung umgedreht. Sie begann mit „welches große
-Modell passt noch hinein" und endet bei **„welches kleinste Modell löst die Aufgabe
-zuverlässig"** — weil Speicherreserve auf dieser Maschine direkt in Stabilität umschlägt.
-
-### Reasoning abschalten hilft nicht
-
-Naheliegender Gedanke, da Devstral die Aufgabe mit `reasoning_tokens: 0` löst: beim
-Qwen-MoE das Denken abschalten und die Schleife umgehen.
-
-| Modus | Reasoning | Completion | Zeit | Toolcall |
+| Mode | Reasoning | Completion | Time | Tool call |
 |---|---:|---:|---:|---|
-| Thinking an | 108 | 169 | 4,4 s | ja |
-| `/no_think` | 2 | 2.047 *(Limit)* | 64,8 s | **nein** |
+| thinking on | 108 | 169 | 4.4 s | yes |
+| `/no_think` | 2 | 2,047 *(limit)* | 64.8 s | **no** |
 
-Ohne Denken ruft das Modell gar keine Tools mehr auf und schwafelt bis ins Token-Limit.
-Bei Qwen3.6 trägt das Reasoning das Tool-Calling — man kann es nicht entfernen und das
-Verhalten eines Nicht-Reasoning-Modells erwarten. Devstral kommt ohne aus, weil es so
-trainiert wurde, nicht weil Denken optional wäre.
+Without thinking the model stops calling tools altogether and rambles to the token limit.
+For Qwen3.6 the reasoning is load-bearing for tool use — you cannot strip it and get a
+non-reasoning model's behaviour. Devstral works without it because it was trained that
+way, not because thinking is optional.
 
-*(`chat_template_kwargs: {"enable_thinking": false}` wird von LM Studio stillschweigend
-ignoriert; nur das `/no_think`-Token in der Nachricht wirkt tatsächlich.)*
-
----
-
-## Befund 2 — Ein fehlerhafter Toolcall bei 202
-
-Die Frage, mit der diese Untersuchung begann, war, ob 3-bit-Quantisierung Toolcall-
-Argumente beschädigt. Über die gesamte Reihe — sechs Modelle, drei Promptgrößen, zwei
-Sampling-Regime, dazu die Reparaturaufgabe — ergaben **202 Toolcalls genau einen
-Schema-Fehler**: ein `write` mit vollständig leerem Argument-Objekt. Der Agent erholte
-sich im nächsten Schritt, der Lauf wurde trotzdem grün.
-
-Das Harness prüft das selbst, statt dem Agenten-Framework zu vertrauen: es deklariert das
-JSON-Schema und validiert jeden eingehenden Aufruf gegen die eigene `required`-Liste,
-bevor es ihn ausführt.
-
-Ein Detail ist auffällig, aber unbelegt: der einzige Fehler trat bei der echten Aufgabe
-auf, wo `write`-Argumente eine ganze Quelldatei von 1.400 Token transportieren statt
-zweier kurzer Strings. Große Argumente könnten der Risikofaktor sein. Ein Vorkommnis ist
-kein Beleg; es steht hier als Hypothese.
-
-> **Die Unterscheidung, auf die es ankommt:** „Modell erzeugt kaputte Toolcall-Argumente"
-> und „Modell erzeugt gar keine Toolcalls" sehen im Fehlerlog eines Agenten identisch aus
-> und haben nichts miteinander zu tun. Das erste zeigt auf die Quantisierung. Das zweite —
-> das tatsächlich eintrat — zeigt auf Instruktionsbefolgung unter Kontextdruck. Ich habe
-> Stunden auf das falsche verwendet.
+*(`chat_template_kwargs: {"enable_thinking": false}` is silently ignored by LM Studio;
+only the `/no_think` token in the message actually takes effect.)*
 
 ---
 
-## Befund 3 — Sampling rettet ein empfindliches Modell und ist einem robusten egal
+## Finding 2 — One malformed tool call in 202
 
-Qwens dokumentierte Empfehlung für den Thinking-Modus ist `temperature 0.6`,
-`top_p 0.95`, `top_k 20`. Ich hatte mit `temperature 0.3` ganz ohne Truncation-Parameter
-gearbeitet. Beim Qwen-MoE ist der Unterschied nicht subtil:
+The question that started this investigation was whether 3-bit quantisation was
+corrupting tool arguments. Across the whole study — six models, three prompt sizes, two
+sampling regimes, plus the repair task — **202 tool calls produced exactly one schema
+failure**: a `write` with a completely empty arguments object. The agent recovered on the
+next step and the run still went green.
 
-| Sampling | Reasoning-Token | Dauer | Finish | Ergebnis |
+The harness validates this itself rather than trusting the agent framework, declaring the
+JSON schema and checking every incoming call against its own `required` list before
+executing it.
+
+One detail is suggestive but unproven: the single failure came on the real task, where
+`write` arguments carry an entire 1,400-token source file, not the two short strings the
+toy task needed. Large arguments may well be where this risk lives. One occurrence is not
+evidence; it stands here as a hypothesis.
+
+> **The distinction that matters:** "model emits broken tool arguments" and "model emits
+> no tool calls at all" look identical in an agent's error log and have nothing in common
+> underneath. The first points at quantisation. The second — the one that actually
+> happened — points at instruction following under context pressure. I spent hours on the
+> wrong one.
+
+---
+
+## Finding 3 — Sampling rescues a fragile model and is irrelevant to a robust one
+
+Qwen's documented recommendation for thinking mode is `temperature 0.6`, `top_p 0.95`,
+`top_k 20`. I had been running `temperature 0.3` with no truncation parameters at all. On
+the Qwen MoE the difference is not subtle:
+
+| Sampling | Reasoning tokens | Wall | Finish | Result |
 |---|---:|---:|---|---|
-| temp 0.3, kein top_k/top_p | 8.191 | 143 s | length | nichts |
-| temp 0.6, top_p 0.95, top_k 20 | 105 | 4 s | tool_calls | korrekter Aufruf |
+| temp 0.3, no top_k/top_p | 8,191 | 143 s | length | nothing |
+| temp 0.6, top_p 0.95, top_k 20 | 105 | 4 s | tool_calls | correct call |
 
-Ein Faktor 78 aus vier Zahlen. Niedrige Temperatur ohne Nucleus- und Top-k-Begrenzung
-treibt dieses Modell in eine Wiederholungsschleife. Der Fingerabdruck im Server-Log von
-LM Studio ist eindeutig: wiederholt *Token-ID 0* (`!`), als ungültiges Sample verworfen.
+A 78× difference from four numbers. Low temperature without nucleus and top-k truncation
+drives this model into a repetition loop. The fingerprint in LM Studio's server log is
+unmistakable: repeated *token ID 0* (`!`) rejected as an invalid sample.
 
-> **Sampling verringert diesen Fehler — es beseitigt ihn nicht.** Die korrekten Parameter
-> brachten das MoE von 0/6 auf 3/6 bei der synthetischen und 3/4 bei der echten Aufgabe.
-> Aber die Token-ID-0-Schleife trat *mit korrektem Sampling* weiterhin auf, in einem von
-> vier Läufen, mit 8.211 verbrannten Reasoning-Tokens.
+> **Sampling reduces this failure — it does not remove it.** The correct parameters took
+> the Qwen MoE from 0/6 to 3/6 on the synthetic task and 3/4 on the real one. But the
+> token-ID-0 loop still appeared *with correct sampling*, in one run of four, burning
+> 8,211 reasoning tokens.
 
-**Dann lief dieselbe kaputte Konfiguration gegen gpt-oss, und es störte sich nicht daran.**
+**Then I ran the same broken configuration against gpt-oss, and it did not care.**
 
-| Modell | Erfolg | Median | Toolcalls | Length-Stops |
+| Model | Verified | Median | Tool calls | Length stops |
 |---|---:|---:|---:|---:|
-| gpt-oss-20b | **6/6** | 14,4 s | 14 | 0 |
-| Qwen3.6-35B-A3B | 0/6 | — | 0 | jeder Schritt |
+| gpt-oss-20b | **6/6** | 14.4 s | 14 | 0 |
+| Qwen3.6-35B-A3B | 0/6 | — | 0 | every step |
 
-gpt-oss war mit den „kaputten" Einstellungen sogar *schneller* — 14,4 s statt 16,4 s —
-weil die niedrigere Temperatur es entschlossener machte und es weniger Schritte brauchte.
+gpt-oss was in fact *faster* with the "broken" settings — 14.4 s against 16.4 s — because
+lower temperature made it more decisive and it needed fewer steps.
 
-Die ehrliche Fassung dieses Befunds ist enger als die, die ich zuerst veröffentlicht
-hatte: diese Parameter sind keine allgemeine Lösung für lokales agentisches Coding. Sie
-sind die Rettung für ein Modell, das ihnen gegenüber empfindlich ist. Wenn dein Modell
-sie braucht, sagt es dir damit etwas über sich.
+So the honest version of this finding is narrower than the one I first published: these
+parameters are not a general fix for local agentic coding. They are a rescue for a model
+that is fragile to them. If your model needs them, it is telling you something about
+itself.
 
 ---
 
-## Befund 4 — Die Dateigröße ist die falsche Zahl. Rechne die KV-Cache aus.
+## Finding 4 — File size is the wrong number. Compute the KV cache.
 
-Ich habe Kandidaten nach Gewichtsgröße ausgewählt, und das führte in die Irre.
-Devstral-Small-2-24B ist auf der Platte *kleiner* als das Qwen-MoE — 14,39 gegen 15,20 GB
-— und auf dieser Maschine deutlich schlechter nutzbar, weil die Attention-Architektur
-grundverschieden ist.
+I picked candidates by weight size, and it led me astray. Devstral-Small-2-24B is
+*smaller* on disk than the Qwen MoE — 14.39 against 15.20 GB — and far less usable on
+this machine, because its attention architecture is completely different.
 
-Qwen3.5/3.6 verschränken Linear-Attention- mit Full-Attention-Layern; gpt-oss wechselt
-zwischen Sliding-Window und Full Attention mit einem 128-Token-Fenster. Nur
-Full-Attention-Layer kosten KV-Cache. Devstral hat `sliding_window: null` — alle 40 Layer
-sind Full Attention, bei 8 KV-Heads und `head_dim` 128.
+Qwen3.5/3.6 interleave linear-attention layers with full-attention ones; gpt-oss
+alternates sliding-window and full attention with a 128-token window. Only full-attention
+layers cost KV cache. Devstral has `sliding_window: null` — all 40 layers are full
+attention, at 8 KV heads and `head_dim` 128.
 
 ```
 bytes/token = full_attention_layers
             × num_key_value_heads
             × head_dim
-            × 2   (K und V)
-            × 2   (Bytes pro fp16-Element)
+            × 2   (K and V)
+            × 2   (bytes per fp16 element)
 ```
 
-| Modell | Layer | Full-Attn | KV-Heads | head_dim | KB/Token | KV @32k | nutzbarer Kontext |
+| Model | Layers | Full-attn | KV heads | head_dim | KB/token | KV @32k | Usable context |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Qwen3.6-35B-A3B | 40 | 10 | 2 | 256 | 20 | 0,65 GB | 32.768 |
-| gpt-oss-20b | 24 | 12 | 8 | 64 | 24 | 0,75 GB | 32.768 |
-| Devstral-Small-2-24B | 40 | **40** | 8 | 128 | **160** | **5,00 GB** | **4.864** |
-| gemma-4-26b-a4b | 30 | 5 | 8 | 256 | 40 | 1,25 GB | 16.384 |
+| Qwen3.6-35B-A3B | 40 | 10 | 2 | 256 | 20 | 0.65 GB | 32,768 |
+| gpt-oss-20b | 24 | 12 | 8 | 64 | 24 | 0.75 GB | 32,768 |
+| Qwen3.5-9B | 32 | 8 | 4 | 256 | 32 | 1.07 GB | 92,672 |
+| gemma-4-12B | 48 | 8 | 8 | 256 | 64 | 2.15 GB | 90,624 |
+| Devstral-Small-2-24B | 40 | **40** | 8 | 128 | **160** | **5.00 GB** | **4,864** |
+| Qwen3-14B *(older gen)* | 40 | **40** | 8 | 128 | **160** | 5.37 GB | — |
 
-Dafür gibt es in diesem Repo [`tools/kvcalc.py`](../tools/kvcalc.py) — es liest
-`config.json` und rechnet aus, was bei deinem Kontext übrig bleibt, bevor du ein Gigabyte
-herunterlädst.
+[`tools/kvcalc.py`](../tools/kvcalc.py) computes this from `config.json` before you spend
+a gigabyte of bandwidth.
 
-> **LM Studio hat den Kontext stillschweigend gekürzt.** Ich forderte 16.384 Token an. Das
-> Modell lud erfolgreich in 6,1 Sekunden, ohne jede Warnung — und die `CONTEXT`-Spalte von
-> `lms ps` zeigte **4.864**. `--parallel 1` änderte nichts. Das einzige Symptom kam später
-> als HTTP 400: *„The number of tokens to keep from the initial prompt is greater than the
-> context length"*. Prüfe `lms ps` nach jedem Laden.
+> **LM Studio silently capped the context.** I requested 16,384 tokens. The model loaded
+> successfully in 6.1 seconds with no warning of any kind — and the `CONTEXT` column of
+> `lms ps` read **4,864**. `--parallel 1` made no difference. The only symptom came later
+> as HTTP 400: *"The number of tokens to keep from the initial prompt is greater than the
+> context length"*. Check `lms ps` after every load.
 
-### Und dann entscheidet die Runtime, ob irgendetwas davon zählt
-
-Aus der 4.864er-Grenze schloss ich, Devstral sei auf 24 GB unbrauchbar. Das war falsch,
-und die Art des Fehlers ist lehrreich: ich hatte ein *Werkzeug* gemessen und das Ergebnis
-dem *Modell* zugeschrieben. Drei Wege zu denselben Gewichten, drei Ergebnisse:
-
-| Weg | nutzbarer Kontext | Tool-Calling | Urteil |
-|---|---:|---|---|
-| LM Studio + MLX (MXFP4) | 4.864 — gedeckelt | funktioniert | Kontext zu klein für einen Agenten |
-| `mlx_lm.server` + MLX | 13.728 gemessen | **defekt** | liefert eine leere Nachricht |
-| LM Studio + GGUF (IQ4_XS) | 16.384 — wie angefordert | funktioniert | **nutzbar** |
-
-Direkt über MLX verarbeitete Devstral einen 13.728-Token-Prompt in 31,7 s bei 16,43 GB
-Peak — der Beweis, dass weder Modell noch MLX ein 4.864-Token-Problem haben. Aber
-`mlx_lm.server` 0.31.3 liefert die Toolcalls dieses Modells nicht aus: es meldet korrekt
-`has_tool_calling = True`, das Modell erzeugt 34 Token, und die Antwort enthält nichts
-außer `{"role": "assistant"}`. Reiner Chat funktioniert; sobald `tools` mitgeschickt wird,
-ist die Antwort leer.
-
-Der GGUF-Weg ist der einzige, der beides kann. Er kostet Geschwindigkeit — 132 s pro
-Aufgabe gegen 55 s für gpt-oss unter MLX — aber er ist der Unterschied zwischen nutzbar
-und unbrauchbar.
-
-Noch eine llama.cpp-Falle: bei Kontextüberlauf **hängt** es, statt einen Fehler zu
-liefern. Ein 24.000-Token-Prompt in einen 16.384-Token-Kontext ergab Stille, bis LM Studio
-fünfzehn Minuten später `Channel Error` protokollierte. MLX antwortet auf denselben Fehler
-mit einem sauberen HTTP 400.
+Note the contrast at the other end of the table: because hybrid attention makes their KV
+cache cheap, LM Studio granted Qwen3.5-9B and Gemma 4 12B over 90,000 tokens unprompted.
 
 ---
 
-## Befund 5 — Die Engine entscheidet über Brauchbarkeit, nicht nur über Tempo
+## Finding 5 — The smallest model nearly wins
 
-Dreimal an einem Tag hat der Wechsel von MLX auf llama.cpp ein Modell von „unbrauchbar"
-zu „funktioniert" gedreht. Jedes Mal sah der Fehler im Log wie Modellversagen aus.
+`Qwen3.5-9B` is the surprise of the series. At **half the weights of gpt-oss** it matches
+its speed, trails its reliability by one run, and needs **39 % of memory instead of
+67 %**. A 9B of the newer generation beats a 35B of the previous one decisively, at a
+fifth of the footprint.
 
-| Modell | unter MLX | unter GGUF |
+Its one failure is benign in shape: run 3 stopped after 4 seconds with a single tool call
+and 107 reasoning tokens. It ran the tests once and gave up. No loop, no token limit, no
+degenerate output — a fresh session would have fixed it. That is a different animal from
+the Qwen MoE's failures, which were expensive and could not be aborted.
+
+Which inverts the question this investigation started with. It began as "which large
+model still fits" and ends at **"which smallest model does the job reliably"** — because
+on this machine, memory headroom converts directly into stability.
+
+---
+
+## Finding 6 — The engine decides usability, not just speed
+
+Three times in one day, switching from MLX to llama.cpp turned a model from unusable into
+working. Every time, the failure looked like a model failure in the log.
+
+| Model | Under MLX | Under GGUF |
 |---|---|---|
-| Devstral-Small-2-24B | Kontext still auf 4.864 gedeckelt | 16.384 wie angefordert |
-| Qwen3.6-27B | Guardrail verweigert das Laden komplett | lädt mit vollem Kontext |
-| Gemma 4 12B | **0/6** — Kanal-Marker-Schleife | **5/6** |
+| Devstral-Small-2-24B | context silently capped at 4,864 | 16,384 as requested |
+| Qwen3.6-27B | guardrail refuses to load at all | loads at full context |
+| Gemma 4 12B | **0/6** — channel-marker loop | **5/6** |
 
-Der Gemma-Fall ist der klarste, weil dasselbe Modell mit derselben Aufgabe, demselben
-Harness und denselben Sampling-Werten gemessen wurde — die Engine war die einzige Variable.
+The Gemma case is the cleanest, because the same model ran the same task through the same
+harness with the same sampling — the engine was the only variable.
 
-Unter LM Studios MLX-Pfad lecken Gemmas Kanal-Marker als Rohtext in `content`:
+Under LM Studio's MLX path, Gemma's channel markers leak into `content` as raw text:
 
 ```
 <|channel>thought
 <channel|>
 ```
 
-Anfangs sind es 28 Zeichen. Nach dem Schritt, der `duration.py` einliest, degeneriert die
-Generierung in eine reine Marker-Schleife — **49.258 Zeichen, 8.191 Tokens, Length-Stop**,
-in zwei unabhängigen Durchläufen an exakt derselben Stelle. `reasoning_tokens` meldete
-durchgehend 0.
+It starts at 28 characters. After the step that reads `duration.py`, generation
+degenerates into nothing but markers — **49,258 characters, 8,191 tokens, length stop** —
+in two independent runs at exactly the same point. `reasoning_tokens` read 0 throughout.
 
-Meine erste Erklärung war eine Rückkopplung: mein Harness schreibt den Content als
-Assistant-Nachricht zurück, das Modell sieht seine eigenen kaputten Marker und produziert
-mehr davon. Die Gegenprobe widerlegte das — mit herausgefilterten Markern (bereinigter
-Content: 0 Zeichen in allen Schritten) kippte es an derselben Stelle erneut. Die Schleife
-entsteht neu, nicht durch Rückkopplung.
+My first explanation was a feedback loop: the harness writes content back as an assistant
+message, the model sees its own broken markers and produces more. The control experiment
+refuted it — with markers stripped (cleaned content: 0 characters at every step) it broke
+at the same place again. The loop is generated fresh, not fed back.
 
-Unter llama.cpp verschwindet das Problem vollständig: kein einziger Marker, und
-`reasoning_tokens` liegt bei 225 bis 2.797. Was dort korrekt als Reasoning erkannt und
-abgetrennt wird, ist unter MLX der Müll, der die Ausgabe sprengt — zwei Seiten derselben
-Sache.
+Under llama.cpp the problem vanishes completely: not a single marker, and
+`reasoning_tokens` lands between 225 and 2,797. What is correctly recognised and
+separated as reasoning there is the garbage that blows up the output under MLX — two
+sides of the same thing.
 
-**Der Preis ist Tempo.** llama.cpp nutzt die Neural Accelerators des M5 nicht und liegt
-rund 2,4× hinter MLX. Gemma braucht unter GGUF 156 s im Median gegen 55 s für gpt-oss
-unter MLX, mit erheblicher Streuung: vier saubere Läufe zwischen 146 und 164 Sekunden,
-dazu ein Ausreißer mit 1.226 Sekunden.
-
-Für Modelle, die unter MLX sauber laufen, bleibt MLX die bessere Wahl. Aber wenn ein
-Modell sich merkwürdig verhält, ist der Engine-Wechsel der erste Test — nicht der letzte.
+> **The cost is speed.** llama.cpp does not use the M5's neural accelerators and runs
+> roughly 2.4× behind MLX. Gemma needs a 156 s median under GGUF against 55 s for gpt-oss
+> under MLX, with heavy variance: four clean runs between 146 and 164 seconds, plus one
+> outlier at 1,226 seconds.
+>
+> For models that run cleanly under MLX, MLX stays the better choice. But when a model
+> behaves strangely, switching the engine is the *first* test, not the last.
 
 ---
 
-## Befund 6 — Wired Memory ist eine Sprungfunktion, und die Pressure-Anzeige sieht sie nicht
+## Finding 7 — Wired memory is a step function, and pressure monitoring cannot see it
 
-MLX lädt Safetensors per `mmap`. Im Leerlauf sind diese Seiten file-backed — active oder
-inactive, nicht wired. Sobald die Inferenz startet, verdrahtet die GPU sie, und der
-Wired-Speicher springt in unter zwei Sekunden auf ein Plateau.
+MLX loads safetensors via `mmap`. At idle those pages are file-backed — active or
+inactive, not wired. The moment inference starts the GPU wires them, and wired memory
+jumps to a plateau in under two seconds.
 
-Gemessen alle 2 Sekunden über eine 1.200-Token-Generierung beim 15,2-GB-Modell:
+Sampled every 2 seconds through a 1,200-token generation on the 15.2 GB model:
 
-| Zeit | Wired | Phase |
+| Time | Wired | Phase |
 |---:|---:|---|
-| 0 s | 2,24 GB | Leerlauf |
-| 2 s | 19,26 GB | Anlauf abgeschlossen |
-| 4–16 s | 19,15 – 19,29 GB | Generierung |
-| 18 s | 2,38 GB | freigegeben |
+| 0 s | 2.24 GB | idle |
+| 2 s | 19.26 GB | ramp complete |
+| 4–16 s | 19.15 – 19.29 GB | generating |
+| 18 s | 2.38 GB | released |
 
-Flach über die gesamte Generierung — 30 MB Drift. Kein Leck. Aber es liegt für die Dauer
-jeder einzelnen Anfrage bei 80 % des physischen Speichers, und `memory_pressure` meldet
-die ganze Zeit „alles in Ordnung".
+Flat across the whole generation — 30 MB of drift. Not a leak. But it sits at 80 % of
+physical memory for the duration of every single request, and `memory_pressure` reports
+the system as comfortable throughout.
 
-Das Plateau liegt grob bei **Gewichte + 2–3 GB** über dem, was das System ohnehin hält:
+The plateau runs roughly **weights + 2–3 GB** on top of whatever the OS already holds:
 
-| Modell | Prompt | Kontext | Wired-Peak | Anteil |
+| Model | Prompt | Context | Wired peak | Share |
 |---|---|---:|---:|---:|
-| gpt-oss-20b | kurz | 32.768 | 14,79 GB | 62 % |
-| gpt-oss-20b | lang | 32.768 | 16,11 GB | 67 % |
-| Devstral-Small-2-24B | kurz | 4.864 | 16,25 GB | 68 % |
-| Qwen3.6-35B-A3B | kurz | 32.768 | 18,80 GB | 78 % |
-| Qwen3.6-35B-A3B | lang | 32.768 | 19,29 GB | 80 % |
+| Qwen3.5-9B | repair task | 92,672 | 9.41 GB | 39 % |
+| gpt-oss-20b | small | 32,768 | 14.79 GB | 62 % |
+| gpt-oss-20b | large | 32,768 | 16.11 GB | 67 % |
+| Devstral-Small-2-24B | small | 4,864 | 16.25 GB | 68 % |
+| Qwen3.6-35B-A3B | small | 32,768 | 18.80 GB | 78 % |
+| Qwen3.6-35B-A3B | large | 32,768 | 19.29 GB | 80 % |
 
 ---
 
-## Befund 7 — Man kann das ganze Speicherproblem wegtauschen, gegen Latenz
+## Finding 8 — You can trade the whole memory problem away, for latency
 
-Alles bisherige kämpft um Luft innerhalb von 24 GB.
-[TurboFieldfare](https://github.com/drumih/turbo-fieldfare) umgeht den Kampf: eine
-Swift-und-Metal-Runtime, weder MLX noch llama.cpp, geschrieben für genau ein Modell —
-Gemma 4 26B-A4B. Sie hält einen 1,35 GB großen Kern resident und **streamt die Experten
-jedes Tokens von der SSD**. Das funktioniert nur, weil das Modell ein Mixture of Experts
-mit 4B aktiven von 26B Parametern ist.
+Everything above fights for headroom inside 24 GB.
+[TurboFieldfare](https://github.com/drumih/turbo-fieldfare) sidesteps the fight: a Swift
+and Metal runtime, neither MLX nor llama.cpp, written for exactly one model — Gemma 4
+26B-A4B. It keeps a 1.35 GB core resident and **streams each token's experts off the
+SSD**. That only works because the model is a mixture of experts with 4B active of 26B.
 
-Die Speicherbehauptung ist kein Marketing:
+The memory claim is not marketing:
 
-| Modell · Runtime | Parameter | Wired | Anteil | Prozess-RSS |
+| Model · runtime | Parameters | Wired | Share | Process RSS |
 |---|---:|---:|---:|---:|
-| Gemma 4 26B-A4B · TurboFieldfare | 26B | **5,65 GB** | **24 %** | 1,60 GB |
-| gpt-oss-20b · MLX | 21B | 16,11 GB | 67 % | 11,27 GiB |
-| Qwen3.6-35B-A3B · MLX | 35B | 20,17 GB | 84 % | 14,16 GiB |
+| Gemma 4 26B-A4B · TurboFieldfare | 26B | **5.65 GB** | **24 %** | 1.60 GB |
+| gpt-oss-20b · MLX | 21B | 16.11 GB | 67 % | 11.27 GiB |
+| Qwen3.6-35B-A3B · MLX | 35B | 20.17 GB | 84 % | 14.16 GiB |
 
-Ein 26-Milliarden-Parameter-Modell bei 24 % des Speichers. Der gesamte Bereich, in dem der
-Kernel-Bug aus Befund 7 lauert, ist damit nicht mehr erreichbar. Prompt-Prefix-Reuse
-funktioniert ebenfalls: 12.642 von 20.087 Prompt-Token kamen aus dem Cache.
+A 26-billion-parameter model at 24 % of memory. The entire band where the kernel bug from
+Finding 9 lives is no longer reachable. Prompt-prefix reuse works too: 12,642 of 20,087
+prompt tokens came from cache.
 
-**Und dann ist es zu langsam.** Das ist das Urteil aus der praktischen Nutzung über
-OpenCode, nicht aus einem Benchmark: es antwortet, die Analyse taugt, und die Wartezeit
-macht es für interaktive Arbeit unbrauchbar. Das README des Projekts misst 31–35 tok/s auf
-einem 24-GB-M5-Pro — respektabel — aber Decode-Geschwindigkeit ist nicht die ganze
-Geschichte, wenn jeder Schritt Experten von der Platte nachlädt.
+**And then it is too slow.** That verdict comes from actually driving it through
+OpenCode, not from a benchmark: it answers, the analysis is sound, and the wait makes it
+impractical for interactive work.
 
-Der Handel ist explizit und auf der falschen Maschine getroffen. Auf einem 8-GB-MacBook-Air,
-wo die Alternative „geht gar nicht" heißt, ist Latenz gegen Machbarkeit offensichtlich
-richtig. Auf 24 GB, wo ein 12-GB-Modell mit Reserve hineinpasst, zahlt man Latenz für
-Speicher, den man nicht brauchte.
+The trade is explicit and made on the wrong machine. On an 8 GB MacBook Air, where the
+alternative is "cannot run a 26B model at all", latency for feasibility is obviously
+correct. On 24 GB, where a 6 GB model fits with room to spare, you are paying latency for
+memory you did not need.
 
-> **Elf Tage alt, und man merkt es.** Die Reparaturaufgabe ergab hier 0/6, aber diese Zahl
-> ist keine Fähigkeitsmessung. Zwei Störgrößen: während eines Teils der Serie war ein
-> zweites Modell resident (mein Fehler), und *jeder* Lauf lief in einen HTTP 500, den ich
-> isoliert nicht reproduzieren konnte.
+> **Eleven days old, and it shows.** The repair task produced 0/6 here, but that number is
+> not a capability measurement — a second model was resident for part of the series (my
+> error), and *every* run hit an HTTP 500 I could not reproduce in isolation.
 >
-> Eine Beobachtung steht unabhängig davon: über 18 Toolcalls rief das Modell jedes Mal
-> `bash` und **kein einziges Mal `write`** auf. Es führte die Tests aus, sah sie
-> scheitern, und versuchte nie eine Änderung.
->
-> Der Installer ist ähnlich rau: kein Timeout auf HTTP-Range-Requests, eine abgebrochene
-> Verbindung lässt ihn still warten — meiner stand 53 Minuten bei 44 % mit 0 % CPU ohne
-> Fehlermeldung. Sein `--resume` ist verlustfrei, was die Lage rettet, aber unbeaufsichtigt
-> installieren sollte man das noch nicht.
-
-Beobachten, nicht übernehmen. Erstes Release am 20. Juli 2026, der
-OpenAI-kompatible Server am 27., Long-Context-Prefill am 29. — fünf Releases in zehn Tagen.
+> The installer has no timeout on its HTTP range requests, so a dropped connection leaves
+> it waiting silently — mine sat for 53 minutes at 44 % with 0 % CPU and no error message.
+> Its `--resume` is genuinely lossless, which saves the situation, but unattended
+> installation is not something to count on yet.
 
 ---
 
-## Befund 8 — Der Kernel-Panic ist ein ungelöster Apple-Bug, nicht MLX
+## Finding 9 — The kernel panic is an unresolved Apple bug, not MLX
 
-Mitten in der Sitzung ging die Maschine hart zu Boden:
+Mid-session the machine went down hard:
 
 ```
 panic(cpu 12 caller 0xfffffe0050784280):
@@ -423,168 +378,159 @@ Kernel Extensions in backtrace:
 Darwin Kernel Version 25.5.0 / OS version 25F80
 ```
 
-Eine bekannte Fehlerklasse in Apples IOGPU-Kernel-Extension, mehrfach gemeldet:
+A known defect class in Apple's IOGPU kernel extension, reported repeatedly:
 
 - [mlx-lm #883](https://github.com/ml-explore/mlx-lm/issues/883) — Qwen3-Coder-30B-A3B in
-  einer Agenten-Session, KV-Cache wuchs unbegrenzt auf ~58k Token, 80,14 GB Wired von
-  96 GB, Panic bei `IOGPUMemory.cpp:550`. Der Memory-Pressure-Monitor meldete durchgehend
-  *false*. Offen.
-- [mlx #3186](https://github.com/ml-explore/mlx/issues/3186) — M4 Max 36 GB, reproduzierbar
-  bei ~173k-Token-Prefill. An Apple eskaliert als FB22091885. Offen.
-- [mlx #3346](https://github.com/ml-explore/mlx/issues/3346) — M3 Ultra 96 GB, benennt beide
-  als IOGPU-Kext-Defekte inklusive einer Race Condition in `IOGPUGroupMemory.cpp:219` —
-  dieselbe Datei wie mein Panic, andere Zeile.
+  an agentic session, KV cache growing unbounded to ~58k tokens, 80.14 GB wired of 96 GB,
+  panic at `IOGPUMemory.cpp:550`. The reporter's memory-pressure monitor read *false*
+  throughout. Open.
+- [mlx #3186](https://github.com/ml-explore/mlx/issues/3186) — M4 Max 36 GB, reproducible
+  at ~173k-token prefill. Escalated to Apple as FB22091885. Open.
+- [mlx #3346](https://github.com/ml-explore/mlx/issues/3346) — M3 Ultra 96 GB, names both
+  as IOGPU kext defects including a race in `IOGPUGroupMemory.cpp:219` — same file as my
+  panic, different line.
 
-> **Warum das schlimmer ist, als es klingt:** Wired Memory umgeht die
-> Memory-Pressure-Erkennung von macOS, es warnt also nichts, bevor der Kernel umfällt. Eine
-> 96-GB-Maschine stürzte bei 83 % Wired ab. Ein 15-GB-Modell auf einer 24-GB-Maschine liegt
-> bei *jeder* Inferenz bei 80 %. Das einzige Instrument, das es sieht, ist
-> `memory_pressure | grep "wired down"`.
+> **Why this is worse than it sounds:** wired memory bypasses macOS memory-pressure
+> detection, so nothing warns you before the kernel falls over. A 96 GB machine panicked
+> at 83 % wired. A 15 GB model on a 24 GB machine sits at 80 % during *every* inference
+> call. The only instrument that sees it is `memory_pressure | grep "wired down"`.
 
-> **Es gibt genau ein sichtbares Warnsignal, und es steht in keinem Werkzeug.** Spät in der
-> Sitzung begann der Bildschirm während eines Qwen-MoE-Laufs zu **flackern**. Wired lag bei
-> 20,17 GB — 84 %, der höchste Wert des Tages und über den 83 %, bei denen mlx-lm #883
-> seinen Panic meldet. WindowServer braucht ebenfalls GPU-Speicher, und wenn er ihn nicht
-> bekommt, stottert die Oberfläche. Wenn dein Bildschirm während einer Generierung
-> flackert: speichern und Modell entladen.
+> **There is exactly one visible warning sign, and it is in no tool.** Late in the session
+> the desktop began to **flicker** during a Qwen MoE run. Wired was at 20.17 GB — 84 %,
+> the highest reading of the day and past the 83 % at which mlx-lm #883 reports its panic.
+> WindowServer needs GPU memory too, and when it cannot get it, the UI stutters. If your
+> desktop flickers during a generation: save and unload.
 
-macOS 26.6 liefert GPU-Treiber-Fixes — CVE-2026-64691 (unerwartete Systembeendigung,
-Buffer Overflow) und CVE-2026-43723 (Speicherkorruption). Keiner nennt die
-`IOGPUGroupMemory`-Race.
+macOS 26.6 ships GPU driver fixes — CVE-2026-64691 and CVE-2026-43723. Neither names the
+`IOGPUGroupMemory` race.
 
-**Was ihn tatsächlich gefüttert hat:** nicht die Modellgröße und kein großer Prefill. Das
-Agenten-Log zeigte `step=138` bis `step=145`, vier Sekunden auseinander und weiter
-steigend — eine **Endlosschleife über 145+ Schritte**, jeder davon vergrößerte die
-KV-Cache. Diese Schleife existierte wegen der Sampling-Fehlkonfiguration aus Befund 3.
+**What actually fed it:** not model size and not a large prefill. The agent log showed
+`step=138` through `step=145`, four seconds apart and still climbing — an **endless loop
+of 145+ steps**, each growing the KV cache. That loop existed because of the sampling
+misconfiguration in Finding 3.
 
-> **Nicht nachmachen:** Ich hatte `iogpu.wired_limit_mb` auf 20480 gesetzt und wollte einen
-> LaunchDaemon installieren, um das zu verstetigen. Tu das nicht. mlx-lm #883 empfiehlt,
-> das Wired-Limit zu *senken* — vom ~75-%-Default Richtung 50–60 % — nicht zu erhöhen.
+> **Do not do what I did:** I had raised `iogpu.wired_limit_mb` to 20480 and was about to
+> install a LaunchDaemon to persist it. Don't. mlx-lm #883 recommends moving the wired
+> limit *down* — from the ~75 % default toward 50–60 % — not up.
 
 ---
 
-## Befund 9 — Drei Korrekturen, die es messbar schlechter machten
+## Finding 10 — Three fixes that made things measurably worse
 
-| Änderung | Absicht | Erfolg | Was passierte |
+| Change | Intent | Success | What happened |
 |---|---|---:|---|
-| `tool_choice: "required"` | Toolaufruf erzwingen | 0/3 | 8.191 Token mit *null* Reasoning-Token und leerem Inhalt |
-| `max_tokens: 2048` | Runaway-Reasoning deckeln | 0/2 | jeder Schritt lief ins Limit; echte Completions erreichen 2.361 |
-| Nachfassen bei fehlendem Toolcall | zurück auf Kurs bringen | 0/1 | 3 Nudges, 32.764 Token, 489 s, kein Toolcall |
+| `tool_choice: "required"` | force a tool call | 0/3 | 8,191 tokens with *zero* reasoning tokens and empty content |
+| `max_tokens: 2048` | cap runaway reasoning | 0/2 | every step hit the limit; real completions reach 2,361 |
+| nudge on missing tool call | get it back on track | 0/1 | 3 nudges, 32,764 tokens, 489 s, no tool call |
 
-Das Nudging-Ergebnis ist das nützliche. Ich nahm an, das Modell entscheide sich für Prosa
-und lasse sich zur Handlung bewegen. Nachfassen funktioniert nicht — aber meine
-Schlussfolgerung, der Zustand sei immer endgültig, war zu stark. Bei der echten Aufgabe
-geriet ein Lauf in die degenerierte Schleife, machte weiter und kam nach 251 Sekunden mit
-allen 22 Tests grün heraus. Ein anderer ging hinein und kam nicht zurück. **Erholung ist
-möglich, aber nicht verlässlich; eine frische Session bleibt die bessere Wette.**
+The nudging result is the useful one. I assumed the model was choosing prose and could be
+talked into acting. Nudging does not work — but my conclusion that the state is always
+terminal was too strong. On the real task one run entered the degenerate loop, kept going,
+and came out with all 22 tests green after 251 seconds. Another went in and never
+returned. **Recovery is possible but not reliable; a fresh session is still the better
+bet.**
 
-Die `max_tokens`-Sache ist mein eigener Lesefehler. Ich begründete 2048 mit gemessenen
-Reasoning-Token von 70–210 — aber Reasoning-Token sind eine Teilmenge der
-Completion-Token, und vollständige Completions erreichten 2.361.
+The `max_tokens` one is my own misreading. I justified 2048 with measured reasoning-token
+counts of 70–210 — but reasoning tokens are a subset of completion tokens, and full
+completions reached 2,361.
 
 ---
 
-## Befund 10 — Werkzeugverhalten, das jeweils eine Stunde kostet
+## Finding 11 — Tooling behaviour that costs an hour each
 
 ### LM Studio
 
-- **`lms get` liefert Exit-Code 0, wenn der Download scheitert.** Zweimal passiert — einmal,
-  weil es eine HuggingFace-Repo-ID stillschweigend kleinschrieb. Nie dem Rückgabewert
-  trauen, Dateigrößen prüfen.
-- Modell-Keys matchen per Präfix. `qwen3.6-35b-a3b` ist ein Präfix von
-  `qwen3.6-35b-a3b-ud-mlx`, und mit `-y` warnt es „2 models match, loading the first one"
-  und nimmt irgendeines. Umbenennen mit führendem Punkt hilft nicht — LM Studio scannt
-  Punkt-Verzeichnisse. Aus dem Modellbaum verschieben und
-  `~/.lmstudio/.internal/model-index-cache.json` löschen.
-- Die Benennung von `modelLoadingGuardrails` ist **invertiert**: `mode: "high"` ist der
-  permissive Standard, `mode: "low"` ist streng.
-- Die Guardrail lehnt allein anhand der Gewichte ab. Ein 16,08-GB-Modell scheiterte
-  identisch bei 16.384, 8.192 und 4.096 Kontext mit 20 GB frei. Der „Load Anyway"-Ausweg
-  existiert nur in der GUI.
-- Kontext kann beim Laden still reduziert werden (Befund 4). Immer mit `lms ps` prüfen.
-- Die Server-Logs unter `~/.lmstudio/server-logs/` sind der Ort für echte Diagnose.
-  Achtung: der Zähler `Done reasoning. Reasoned for N seconds` ist **kumulativ** seit
-  Serverstart, nicht pro Anfrage.
+- **`lms get` returns exit code 0 when the download fails.** Twice — once because it
+  silently lowercased a HuggingFace repo ID. Never trust the return value; check sizes.
+- Model keys match by prefix. `qwen3.6-35b-a3b` is a prefix of `qwen3.6-35b-a3b-ud-mlx`,
+  and with `-y` it warns "2 models match, loading the first one" and picks whichever.
+  Renaming with a leading dot does not hide it — LM Studio scans dot-directories.
+- The `modelLoadingGuardrails` naming is **inverted**: `mode: "high"` is the permissive
+  default, `mode: "low"` is strict.
+- The guardrail rejects on weights alone. A 16.08 GB model failed identically at 16,384,
+  8,192 and 4,096 context with 20 GB free. "Load Anyway" exists only in the GUI.
+- Context can be silently reduced at load time (Finding 4). Always check `lms ps`.
+- Server logs under `~/.lmstudio/server-logs/` are where real diagnosis happens. Note that
+  the counter `Done reasoning. Reasoned for N seconds` is **cumulative since server
+  start**, not per request.
 
 ### OpenCode
 
-- `permission` steht per Default auf `ask` für `bash` und `edit`. In nicht-interaktivem
-  `opencode run` hängt das im Vordergrund ewig und **endet im Hintergrund sofort mit
-  Code 0 und leerem Log**, wenn stdin kein TTY ist. Zwei widersprüchlich aussehende
-  Symptome, eine Ursache.
-- `provider.<p>.models.<id>.temperature` ist ein **Boolean-Capability-Flag**, kein Wert.
-  Eine `0.6` dort bewirkt nichts. Sampling-Werte gehören in `models.<id>.options` oder
+- `permission` defaults to `ask` for `bash` and `edit`. In non-interactive `opencode run`
+  this hangs forever in the foreground and **exits immediately with code 0 and an empty
+  log** when stdin is not a TTY. Two contradictory-looking symptoms, one cause.
+- `provider.<p>.models.<id>.temperature` is a **boolean capability flag**, not a value. A
+  `0.6` there does nothing. Sampling values go in `models.<id>.options` or
   `agent.<name>.temperature` / `top_p`.
-- Der interaktive TUI funktionierte durchweg; `opencode run` im Batch-Modus hing in sechs
-  von sieben Versuchen vor der Session-Erstellung, ohne dass eine Anfrage den Modellserver
-  erreichte. Ursache nicht gefunden. Wenn der Batch-Runner klemmt, liegt es nicht an
-  deinem Modell.
+- The interactive TUI worked throughout; `opencode run` in batch mode hung in six of seven
+  attempts before session creation, without a single request reaching the model server.
+  Cause not found.
 
-### HuggingFace-CLI und macOS
+### HuggingFace CLI and macOS
 
-- **Nie ein `hf download` mit `SIGSTOP` anhalten.** Xet-CDN-URLs sind vorsigniert; das
-  Aussetzen lässt sie ablaufen, der Resume liefert 403.
-- `hf download` setzte meine `.incomplete`-Shards nicht fort — es verwarf 1,5 GB.
-- Unsloth-„UD"-Quants sind deutlich größer, als die Bit-Breite nahelegt.
-  `Qwen3.6-35B-A3B-UD-MLX-3bit` ist 17,4 GB gegen 15,2 GB für ein normales 3-bit.
-- macOS hat kein `timeout(1)`. Und `sudo softwareupdate -i -a --restart` lud 26.6 auf
-  100 %, beendete sich mit 0 und installierte nichts. Der GUI-Updater funktionierte.
-- htop kann unter macOS **kein Netzwerk pro Prozess** anzeigen — es gibt kein `/proc`.
-  `nettop` und `bandwhich` können es. Wichtiger noch: bei stoßweisem Verkehr zeigt jede
-  kurze Messung das Falsche; Fenster von mehreren Minuten nehmen.
+- **Never `SIGSTOP` an `hf download`.** Xet CDN URLs are presigned; suspending lets them
+  expire and resume returns 403.
+- `hf download` did not resume my `.incomplete` shards — it discarded 1.5 GB.
+- With `HF_HUB_ENABLE_HF_TRANSFER=1` set but the package missing, `hf` aborts immediately
+  instead of falling back. The target directory sits at 4 KB and nothing says why.
+- Unsloth "UD" quants are much larger than the bit width implies.
+  `Qwen3.6-35B-A3B-UD-MLX-3bit` is 17.4 GB against 15.2 GB for a plain 3-bit.
+- macOS has no `timeout(1)`. And `sudo softwareupdate -i -a --restart` downloaded 26.6 to
+  100 %, exited 0, and installed nothing. The GUI updater worked.
+- htop cannot show **per-process network** on macOS — there is no `/proc`. `nettop` and
+  `bandwhich` can. More importantly: with bursty traffic any short sample shows the wrong
+  thing; use windows of several minutes.
 
 ---
 
-## Korrekturen
+## Corrections
 
-Zehn Schlussfolgerungen mussten zurückgezogen werden. Sie stehen hier, weil das Muster
-übertragbarer ist als die Einzelfälle: ein echtes Symptom, eine plausible Ursache, kein
-Kontrollexperiment.
+Eleven conclusions had to be retracted. They are here because the pattern transfers better
+than the individual cases: a real symptom, a plausible cause, no control experiment.
 
-| Zeit | Behauptung | Was tatsächlich zutraf |
+| Time | Claim | What was actually true |
 |---|---|---|
-| 09:58 | „Wired läuft weg" | Anlauframpe zu einem flachen Plateau, 30 MB Drift. Messung ohne Grund abgebrochen |
-| 10:07 | „Output-Budget zu klein" | Direkter API-Aufruf lieferte einen sauberen Toolcall in 118 Token |
-| 10:28 | „Die 3-bit-Quantisierung ist defekt" | Echte Belege, falsche Deutung: es war das Sampling. 1 Fehler bei 202 Toolcalls |
-| 10:37 | „Promptgröße ist irrelevant" | Galt nur unter kaputtem Sampling. Mit korrektem war sie der stärkste Prädiktor |
-| 10:53 | „max_tokens 2048 reicht" | Eigene Tabelle falsch gelesen: 70–210 waren Reasoning-, nicht Completion-Token |
-| 11:15 | „Es war das Sampling" *(veröffentlicht)* | Kontrolle gegen gpt-oss: 6/6 mit derselben kaputten Konfiguration |
-| 11:41 | „Devstral schafft 0/6" | Zweimal falsch: HTTP 400 vor dem ersten Token, dann meine eigene Verifikationslogik |
-| 19:00 | „Devstral ist auf 24 GB nicht nutzbar" *(veröffentlicht)* | Gemessen war LM Studio, zugeschrieben dem Modell. MLX schafft 13.728 Token |
-| 19:15 | „GGUF ist unerträglich langsam" | Drei Timeouts, verursacht durch meinen eigenen 24.000-Token-Prompt |
-| 20:06 | „807 Sekunden Reasoning auf einer Anfrage" *(veröffentlicht)* | Kumulativer Zähler. Später las er 36.646 s — die Serverlaufzeit |
+| 09:58 | "wired memory is running away" | ramp to a flat plateau, 30 MB drift. Aborted a valid measurement for nothing |
+| 10:07 | "the output budget is too small" | a direct API call returned a clean tool call in 118 tokens |
+| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 202 tool calls |
+| 10:37 | "system prompt size is irrelevant" | true only under broken sampling. With it fixed, prompt size was the strongest predictor |
+| 10:53 | "max_tokens 2048 is enough" | misread my own table: 70–210 were reasoning, not completion tokens |
+| 11:15 | "it was the sampling" *(published)* | control against gpt-oss: 6/6 with the same broken config |
+| 11:41 | "Devstral scores 0/6" | wrong twice: HTTP 400 before the first token, then my own verification logic |
+| 19:00 | "Devstral is not viable on 24 GB" *(published)* | measured LM Studio, attributed to the model. MLX handles 13,728 tokens |
+| 19:15 | "GGUF is unbearably slow" | three timeouts caused by my own 24,000-token prompt |
+| 20:06 | "807 seconds of reasoning on one request" *(published)* | a cumulative counter. It later read 36,646 s — the server's uptime |
+| 17:12 | "Gemma 4 refuses to call `write`" | an LM Studio MLX channel-format defect. Under GGUF it calls `write` and scores 5/6 |
 
-**Das Muster.** Drei davon waren mein eigenes Werkzeug, das ich als Modellverhalten gelesen
-habe: das Backgrounden von `opencode run` (EOF auf stdin, sofortiger Exit 0), die
-Permission-Abfrage (stiller Hänger) und die Verifikationslogik (korrekter Code als
-Fehlschlag gewertet). Jedes sah exakt wie ein Modellversagen aus.
+**The pattern.** Five of the eleven were tooling behaviour mistaken for model behaviour:
+backgrounding `opencode run` (EOF on stdin, instant exit 0), the permission prompt (silent
+hang), my verification logic (correct code scored as failure), Devstral's context cap, and
+Gemma's channel markers. Every one looked exactly like a model failing.
 
-Bei einem Harness, das man selbst geschrieben hat, sollte die erste Hypothese für ein
-überraschendes Ergebnis das Harness sein — nicht das Modell. Ich habe jedes Mal zum Modell
-gegriffen, weil das die interessantere Antwort war.
+With a harness you wrote yourself, the first hypothesis for a surprising result should be
+the harness — not the model. I reached for the model every time, because that was the
+interesting answer.
 
-Die anderen haben eine andere Form: einen echten Effekt an einem Modell gemessen und als
-allgemeines Prinzip formuliert. Das Kontrollexperiment, das alle drei gefunden hätte —
-dieselbe kaputte Konfiguration gegen ein zweites Modell — dauerte elf Minuten, als ich es
-endlich machte.
-
----
-
-## Was offen bleibt
-
-- Ob macOS 26.6 die `IOGPUGroupMemory`-Race behebt. Die gepatchten GPU-Treiber-CVEs sind
-  plausible Kandidaten, nennen sie aber nicht.
-- Warum das Qwen-MoE unter langem Systemprompt einbricht und gpt-oss nicht. Das *Was* ist
-  gemessen, der Mechanismus nicht.
-- Ob die Sliding-Window-Modelle bei wirklich langen Kontexten standhalten. Alles hier lief
-  bei 32k oder darunter; mlx #3186 reproduziert seinen Panic bei ~173k Prefill.
-- Wie sich das über eine einzelne Datei hinaus skaliert. Die Reparaturaufgabe ist echt,
-  aber klein.
-- Ob große Toolcall-Argumente das Schema-Fehler-Risiko treiben. Ein Vorkommnis bei 202 ist
-  eine Hypothese, kein Ergebnis.
-- Warum `opencode run` vor der Session-Erstellung hängt, während der TUI funktioniert.
+The others share a different shape: measured a real effect on one model and stated it as a
+general principle. The control experiment that would have caught all of them — the same
+configuration against a second model — took eleven minutes when I finally ran it.
 
 ---
 
-*Alle Zahlen gemessen auf einer Maschine an einem Tag. Sechs Läufe pro Konfiguration —
-genug, um 3/6 von 6/6 zu unterscheiden, nicht genug für 5/6 gegen 6/6.*
+## What remains open
+
+- Whether macOS 26.6 fixes the `IOGPUGroupMemory` race. The patched GPU driver CVEs are
+  plausible candidates but do not name it.
+- Why the Qwen MoE degrades under a long system prompt while gpt-oss does not. The *what*
+  is measured; the mechanism is not.
+- Whether the sliding-window models hold up at genuinely long contexts. Everything here
+  ran at 32k or below; mlx #3186 reproduces its panic at ~173k prefill.
+- How any of this scales past a single file. The repair task is real but small.
+- Whether large tool-call arguments drive the schema-failure risk. One occurrence in 202
+  is a hypothesis, not a result.
+- Why `opencode run` hangs before session creation while the TUI works.
+
+---
+
+*All numbers measured on one machine on one day. Six runs per configuration — enough to
+tell 3/6 from 6/6, not enough to tell 5/6 from 6/6.*

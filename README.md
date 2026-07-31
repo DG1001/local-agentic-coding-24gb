@@ -1,61 +1,58 @@
 # local-agentic-coding-24gb
 
-Messungen und Werkzeuge zu der Frage, welches lokale Modell auf einem Mac mit
-24 GB Unified Memory tatsächlich für agentisches Coding taugt — und woran es
-scheitert, wenn es scheitert.
+Measurements and tooling for one question: which local model is actually usable for
+agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Sechs Modelle, 202 Toolcalls, sechs identische Läufe pro Konfiguration, gemessen
-auf einem Apple M5 Pro unter macOS 26.6. Der vollständige Bericht liegt in
-[`report/`](report/), die Rohzahlen in
+Six models, 202 tool calls, six identical runs per configuration, measured on an Apple
+M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
-## Das Kurzergebnis
+## The short version
 
-Mit einem kurzen Systemprompt bestehen alle Modelle die Aufgabe. Was sie
-trennt, ist ein realistischer Agenten-Prompt von rund 5.600 Token — die
-Größenordnung, die OpenCode, aider und crush tatsächlich senden.
+With a one-sentence system prompt, every model passes. What separates them is a
+realistic agent prompt of ~5,600 tokens — the size OpenCode, aider and crush actually
+send.
 
-| Modell | Gewichte | Engine | Reparaturaufgabe | Wired |
+| Model | Weights | Engine | Repair task | Wired |
 |---|---:|---|---|---:|
-| gpt-oss-20b MXFP4 | 12,08 GB | MLX | **6/6**, Median 55 s | 67 % |
-| **Qwen3.5-9B 4-bit** | **5,95 GB** | MLX | **5/6**, Median 57 s | **39 %** |
-| Gemma 4 12B Q4_K_M | 7,38 GB | llama.cpp | 5/6, Median 156 s | 51 % |
-| Qwen3.6-35B-A3B 3-bit | 15,20 GB | MLX | 3/4, Median 177 s | 84 % |
-| Devstral-Small-2-24B | 12,76 GB | llama.cpp | 2/2, Median 132 s | — |
-| Gemma 4 12B MLX-4bit | 6,74 GB | MLX | **0/6** — Engine defekt | — |
+| gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6**, 55 s median | 67 % |
+| **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6**, 57 s median | **39 %** |
+| Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6, 156 s median | 51 % |
+| Qwen3.6-35B-A3B 3-bit | 15.20 GB | MLX | 3/4, 177 s median | 84 % |
+| Devstral-Small-2-24B | 12.76 GB | llama.cpp | 2/2, 132 s median | — |
+| Gemma 4 12B MLX-4bit | 6.74 GB | MLX | **0/6** — engine defect | — |
 
-Das kleinste Modell ist fast das beste: Qwen3.5-9B liegt bei halber Größe von gpt-oss
-gleichauf in der Geschwindigkeit, einen Lauf hinter der Zuverlässigkeit — und braucht
-39 statt 67 Prozent des Speichers.
+**The smallest model nearly wins.** Qwen3.5-9B matches gpt-oss on speed at half the
+weights, trails it by one run on reliability, and needs 39 % of memory instead of 67 %.
 
-Und bei drei von sechs Modellen entschied die **Inferenz-Engine** über Brauchbarkeit:
-MLX deckelte Devstrals Kontext auf 4.864, verweigerte Qwen3.6-27B ganz und zerbrach an
-Gemmas Kanal-Format. Unter llama.cpp liefen alle drei.
+**And for three of six models, the inference engine decided usability.** MLX capped
+Devstral's context at 4,864, refused to load Qwen3.6-27B at all, and broke on Gemma's
+channel format. All three worked under llama.cpp.
 
-Und die eine Erkenntnis, die vor jedem Download Zeit spart: **die Dateigröße
-ist die falsche Kennzahl.** Zwei ähnlich große Modelle können sich um den
-Faktor 8 im KV-Cache-Bedarf unterscheiden. Dafür gibt es hier ein Werkzeug.
+The one insight that saves time before any download: **file size is the wrong number.**
+Two similarly sized models can differ by 8× in KV cache cost. There is a tool for that
+here.
 
-## `tools/kvcalc.py` — passt das Modell?
+## `tools/kvcalc.py` — will it fit?
 
-Liest `config.json`, zählt die Layer, die wirklich KV-Cache kosten, und rechnet
-aus, was bei deinem Kontext übrig bleibt.
+Reads `config.json`, counts the layers that actually cost KV cache, and works out what
+is left at your context length.
 
 ```bash
 python3 tools/kvcalc.py mlx-community/gpt-oss-20b-MXFP4-Q8 --ram 24 --context 32768
 ```
 
 ```
-  Attention     layer_types: 12 von 24 full-attention
-  KV-Cache      24.0 KB/Token
-  Gewichte      12.08 GB
+  Attention     layer_types: 12 of 24 full-attention
+  KV cache      24.0 KB/token
+  Weights       12.08 GB
   + KV @ 32768   0.81 GB
   + Overhead     2.50 GB
-  = gesamt      15.38 GB von 24 GB  ->  64 %
-  Bewertung     komfortabel
+  = total       15.38 GB of 24 GB  ->  64 %
+  Verdict       comfortable
 ```
 
-Zum Vergleich dasselbe für Devstral, das keine Sliding-Window-Layer hat:
+The same for Devstral, which has no sliding-window layers:
 
 ```bash
 python3 tools/kvcalc.py mistralai/Devstral-Small-2-24B-Instruct-2512 \
@@ -63,40 +60,38 @@ python3 tools/kvcalc.py mistralai/Devstral-Small-2-24B-Instruct-2512 \
 ```
 
 ```
-  Attention     kein sliding window: alle 40 Layer kosten KV
-  KV-Cache      160.0 KB/Token          ← 6,7× so viel
-  = gesamt      19.57 GB von 24 GB  ->  82 %
-  Bewertung     kritisch
+  Attention     no sliding window: all 40 layers cost KV
+  KV cache      160.0 KB/token          <- 6.7x as much
+  = total       19.57 GB of 24 GB  ->  82 %
+  Verdict       critical
 ```
 
-Die Vorhersage traf: für gpt-oss sagt das Werkzeug 15,38 GB voraus, gemessen
-wurden 16,11 GB.
+The prediction held: the tool says 15.38 GB for gpt-oss, measured was 16.11 GB.
 
-Zeige immer auf das **Quant**, das du wirklich lädst, nicht auf das
-Originalrepo — sonst rechnest du mit der bf16-Größe.
+Always point it at the **quantisation you actually load**, not the original repo —
+otherwise you are computing with bf16 sizes.
 
-## Der Benchmark
+## The benchmark
 
-Zwei Aufgaben, beide maschinell verifizierbar, beide gegen jeden
-OpenAI-kompatiblen Endpunkt lauffähig.
+Two tasks, both machine-verifiable, both runnable against any OpenAI-compatible endpoint.
 
-### Reparaturaufgabe — die aussagekräftigere
+### Repair task — the meaningful one
 
-Ein ISO-8601-Parser mit 22 Tests, von denen 7 fehlschlagen. Drei unabhängige
-Fehler an verschiedenen Stellen: ein fehlendes Feature (Wochen-Designatoren
-fehlen in Regex *und* Einheitentabelle), ein Absturz (`int()` auf Bruchzahlen)
-und ein Logikfehler (Vorzeichen erfasst, aber nie angewandt).
+An ISO-8601 duration parser with 22 tests, 7 of them failing, from three independent
+bugs in different places: a missing feature (week designators absent from both the regex
+*and* the unit table), a crash (`int()` on fractional values), and a logic error (sign
+captured but never applied).
 
 ```bash
 export LLM_URL=http://127.0.0.1:1234/v1/chat/completions
 python3 bench/realagent.py <model-id> /tmp/run1
 ```
 
-Verifiziert wird über die Testsuite selbst. Zusätzlich prüft der Runner, ob
-`test_duration.py` byte-identisch geblieben ist — die Tests zu ändern ist die
-naheliegende Abkürzung, und Modelle nehmen sie.
+Verification is the test suite itself. The runner additionally checks that
+`test_duration.py` is byte-identical afterwards — editing the tests is the obvious
+shortcut, and models take it.
 
-Ausgabe als eine JSON-Zeile:
+Output is a single JSON line:
 
 ```json
 RESULT {"steps": 8, "tool_calls": 7, "schema_errors": 0, "bash_calls": 6,
@@ -105,79 +100,74 @@ RESULT {"steps": 8, "tool_calls": 7, "schema_errors": 0, "bash_calls": 6,
         "tests_untouched": true, "wall_s": 63.0}
 ```
 
-### Synthetische Aufgabe — misst den Einfluss der Prompt-Größe
+### Synthetic task — measures the effect of prompt size
 
-Dieselbe triviale Aufgabe, einmal mit Ein-Satz-Prompt und einmal mit ~5.600
-Token Agenten-Instruktionen:
+The same trivial task, once with a one-sentence prompt and once with ~5,600 tokens of
+agent instructions:
 
 ```bash
 python3 bench/miniagent.py <model-id> /tmp/run_small small
 python3 bench/miniagent.py <model-id> /tmp/run_large large
 ```
 
-Das ist der Test, der die Modelle getrennt hat.
+This is the test that separated the models.
 
-### Konfiguration
+### Configuration
 
-Alles über Umgebungsvariablen:
+Everything through environment variables:
 
-| Variable | Standard | Zweck |
+| Variable | Default | Purpose |
 |---|---|---|
-| `LLM_URL` | `http://127.0.0.1:1234/v1/chat/completions` | Endpunkt |
+| `LLM_URL` | `http://127.0.0.1:1234/v1/chat/completions` | endpoint |
 | `MAX_TOK` | 4096 | `max_tokens` |
-| `TEMP` / `TOP_P` / `TOP_K` / `REP_PEN` | 0.6 / 0.95 / 20 / 1.05 | Sampling |
+| `TEMP` / `TOP_P` / `TOP_K` / `REP_PEN` | 0.6 / 0.95 / 20 / 1.05 | sampling |
 
-`TOP_K=0` lässt `top_p`, `top_k` und `repetition_penalty` **ganz weg** — damit
-reproduziert man die fehlerhafte Konfiguration, die im Bericht ein Modell
-unbrauchbar machte und ein anderes gar nicht störte.
+`TOP_K=0` omits `top_p`, `top_k` and `repetition_penalty` **entirely** — that reproduces
+the broken configuration which made one model unusable and did not bother another at all.
 
-## Was das Harness absichtlich selbst tut
+## What the harness deliberately does itself
 
-Es validiert Toolcall-Argumente gegen das deklarierte Schema, statt dem
-Agenten-Framework zu vertrauen. Genau dafür wurde es gebaut: die Untersuchung
-begann mit `SchemaError`-Meldungen aus OpenCode, und es stellte sich heraus,
-dass das Framework zweimal selbst die Ursache war. Ein Harness ohne
-Zwischenschicht trennt Modellverhalten von Werkzeugverhalten.
+It validates tool-call arguments against the declared schema rather than trusting the
+agent framework. That is why it exists: the investigation started with `SchemaError`
+messages from OpenCode, and the framework turned out to be the cause twice. A harness
+with no layer in between separates model behaviour from tool behaviour.
 
-Ergebnis über die gesamte Reihe: **ein fehlerhafter Toolcall bei 202.**
+Result across the whole series: **one malformed tool call in 202.**
 
-## Anforderungen
+## Requirements
 
-Python 3.9 oder neuer, keine Abhängigkeiten außer der Standardbibliothek.
-`kvcalc.py` braucht Netzzugang für HF-Modell-IDs, arbeitet aber auch mit
-lokalen Pfaden.
+Python 3.9 or newer, no dependencies beyond the standard library. `kvcalc.py` needs
+network access for HF model IDs but also works with local paths.
 
-## Struktur
+## Layout
 
 ```
-bench/          Harness und Aufgaben
-  agentlib.py     Kern: Payload-Bau, Schema-Validierung, Tool-Ausführung
-  realagent.py    Reparaturaufgabe
-  miniagent.py    synthetische Aufgabe, Prompt-Größen-Vergleich
-  task/           der defekte ISO-8601-Parser samt Testsuite
+bench/          harness and tasks
+  agentlib.py     core: payload building, schema validation, tool execution
+  realagent.py    repair task
+  miniagent.py    synthetic task, prompt-size comparison
+  task/           the broken ISO-8601 parser and its test suite
 tools/
-  kvcalc.py       Speicherbedarf aus config.json
-  install_supervisor.sh   Neustart-Wächter für TurboFieldfares Installer
+  kvcalc.py       memory footprint from config.json
+  install_supervisor.sh   restart watchdog for TurboFieldfare's installer
 configs/
-  opencode.example.json   Provider für LM Studio und TurboFieldfare
-report/           der vollständige Bericht
-results/          Rohzahlen aller Messungen
+  opencode.example.json   providers for LM Studio and TurboFieldfare
+report/           the full write-up (Markdown and HTML)
+results/          raw numbers from every measurement
 ```
 
-## Grenzen dieser Messungen
+## Limits of these measurements
 
-Eine Maschine, ein Tag, sechs Läufe pro Konfiguration. Das reicht, um 3/6 von
-6/6 zu unterscheiden, nicht um 5/6 von 6/6 zu trennen. Einzelne Lauf-Unterschiede
-sind Rauschen.
+One machine, one day, six runs per configuration. Enough to tell 3/6 from 6/6, not
+enough to tell 5/6 from 6/6. Treat single-run differences as noise.
 
-Die Reparaturaufgabe ist echt, aber klein — ein Modul, drei Fehler, eine
-Testsuite, die in Millisekunden läuft. Über ein Refactoring über zwanzig Dateien
-sagt sie nichts.
+The repair task is real but small — one module, three bugs, a test suite that runs in
+milliseconds. It says nothing about a refactor spanning twenty files.
 
-Der Bericht enthält einen eigenen Abschnitt mit zehn Schlussfolgerungen, die
-im Lauf der Untersuchung zurückgezogen werden mussten. Er steht dort, weil das
-Muster übertragbarer ist als die Einzelergebnisse.
+The report contains a section listing eleven conclusions that had to be retracted during
+the investigation. It is there because the pattern transfers better than the individual
+results: five of the eleven were tooling behaviour mistaken for model behaviour.
 
-## Lizenz
+## Licence
 
-MIT, siehe [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).

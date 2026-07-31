@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Synthetischer Agentenlauf: misst den Einfluss der Systemprompt-Groesse.
+"""Synthetic agent run: measures the effect of system-prompt size.
 
-Dieselbe triviale Aufgabe, einmal mit einem Ein-Satz-Systemprompt und einmal
-mit ~5.600 Token plausibler Agenten-Instruktionen -- der Groessenordnung, die
-OpenCode, aider und crush tatsaechlich senden.
+The same trivial task, once with a one-sentence system prompt and once with
+~5,600 tokens of plausible agent instructions -- the size OpenCode, aider and
+crush actually send.
 
-Das ist der Test, der in der Messreihe die Modelle getrennt hat: mit kurzem
-Prompt bestanden alle, mit langem nur eines.
+This is the test that separated the models: with the short prompt they all
+passed, with the long one only a single model did.
 
 Usage: miniagent.py <model> <workdir> <small|large> [maxsteps]
 
-Konfiguration ueber Umgebungsvariablen, siehe agentlib.py:
+Configuration through environment variables, see agentlib.py:
     LLM_URL, MAX_TOK, TEMP, TOP_P, TOP_K, REP_PEN
-TOP_K=0 laesst top_p/top_k/repetition_penalty ganz weg -- so reproduziert man
-die fehlerhafte Sampling-Konfiguration aus dem Bericht.
+TOP_K=0 omits top_p/top_k/repetition_penalty entirely -- that reproduces the
+broken sampling configuration from the report.
 """
 import io, json, os, subprocess, sys, time
 
@@ -23,8 +23,8 @@ import agentlib as A
 SYS_SMALL = ("You are a coding agent. Use the provided tools to complete the task. "
              "When done, reply with a short summary.")
 
-# Aufgeblasen auf die Groessenordnung eines echten Agenten-Prompts. Der Inhalt
-# ist bewusst generisch: gemessen wird die Groesse, nicht die Qualitaet.
+# Inflated to the size of a real agent prompt. The content is deliberately
+# generic: what is measured is size, not quality.
 SYS_LARGE = SYS_SMALL + "\n\n" + "\n".join(
     f"## Guideline {i}\n"
     f"- Prefer editing existing files over creating new ones when guideline {i} applies.\n"
@@ -39,9 +39,9 @@ TASK = ('Create a file greet.py with a function greet(name) that returns the str
         '"Hello, <name>!". Then run it with python3 to verify that greet("World") '
         'produces exactly: Hello, World!  Fix and re-run if it fails.')
 
-# Import-Zeit-Ausgaben unterdruecken: manche Modelle schreiben zusaetzlich ein
-# print(greet("World")) auf Modulebene. Das erfuellt die Aufgabe; eine naive
-# Pruefung wertet es faelschlich als Fehlschlag.
+# Suppress import-time output: some models additionally write a module-level
+# print(greet("World")). That satisfies the task; a naive check would wrongly
+# score it as a failure.
 _CHECK = (
     "import io,contextlib,sys\n"
     "buf=io.StringIO()\n"
