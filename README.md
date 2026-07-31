@@ -4,7 +4,7 @@ Messungen und Werkzeuge zu der Frage, welches lokale Modell auf einem Mac mit
 24 GB Unified Memory tatsächlich für agentisches Coding taugt — und woran es
 scheitert, wenn es scheitert.
 
-Vier Modelle, 128 Toolcalls, sechs identische Läufe pro Konfiguration, gemessen
+Sechs Modelle, 202 Toolcalls, sechs identische Läufe pro Konfiguration, gemessen
 auf einem Apple M5 Pro unter macOS 26.6. Der vollständige Bericht liegt in
 [`report/`](report/), die Rohzahlen in
 [`results/measurements.json`](results/measurements.json).
@@ -15,11 +15,22 @@ Mit einem kurzen Systemprompt bestehen alle Modelle die Aufgabe. Was sie
 trennt, ist ein realistischer Agenten-Prompt von rund 5.600 Token — die
 Größenordnung, die OpenCode, aider und crush tatsächlich senden.
 
-| Modell | Kurzer Prompt | Agenten-Prompt | Reparaturaufgabe |
-|---|---|---|---|
-| gpt-oss-20b MXFP4 | 6/6 | **6/6** | **6/6**, Median 55 s |
-| Qwen3.6-35B-A3B 3-bit | 6/6 | 3/6 | 3/4, Median 177 s |
-| Devstral-Small-2-24B | 6/6 | passt nicht in den Kontext | 2/2, Median 132 s |
+| Modell | Gewichte | Engine | Reparaturaufgabe | Wired |
+|---|---:|---|---|---:|
+| gpt-oss-20b MXFP4 | 12,08 GB | MLX | **6/6**, Median 55 s | 67 % |
+| **Qwen3.5-9B 4-bit** | **5,95 GB** | MLX | **5/6**, Median 57 s | **39 %** |
+| Gemma 4 12B Q4_K_M | 7,38 GB | llama.cpp | 5/6, Median 156 s | 51 % |
+| Qwen3.6-35B-A3B 3-bit | 15,20 GB | MLX | 3/4, Median 177 s | 84 % |
+| Devstral-Small-2-24B | 12,76 GB | llama.cpp | 2/2, Median 132 s | — |
+| Gemma 4 12B MLX-4bit | 6,74 GB | MLX | **0/6** — Engine defekt | — |
+
+Das kleinste Modell ist fast das beste: Qwen3.5-9B liegt bei halber Größe von gpt-oss
+gleichauf in der Geschwindigkeit, einen Lauf hinter der Zuverlässigkeit — und braucht
+39 statt 67 Prozent des Speichers.
+
+Und bei drei von sechs Modellen entschied die **Inferenz-Engine** über Brauchbarkeit:
+MLX deckelte Devstrals Kontext auf 4.864, verweigerte Qwen3.6-27B ganz und zerbrach an
+Gemmas Kanal-Format. Unter llama.cpp liefen alle drei.
 
 Und die eine Erkenntnis, die vor jedem Download Zeit spart: **die Dateigröße
 ist die falsche Kennzahl.** Zwei ähnlich große Modelle können sich um den
@@ -128,7 +139,7 @@ begann mit `SchemaError`-Meldungen aus OpenCode, und es stellte sich heraus,
 dass das Framework zweimal selbst die Ursache war. Ein Harness ohne
 Zwischenschicht trennt Modellverhalten von Werkzeugverhalten.
 
-Ergebnis über die gesamte Reihe: **ein fehlerhafter Toolcall bei 128.**
+Ergebnis über die gesamte Reihe: **ein fehlerhafter Toolcall bei 202.**
 
 ## Anforderungen
 

@@ -2,7 +2,7 @@
 
 *Feldnotizen — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Vier Modelle, 128 Toolcalls, sechs identische Läufe pro Konfiguration. Jedes Modell
+Sechs Modelle, 202 Toolcalls, sechs identische Läufe pro Konfiguration. Jedes Modell
 löste die Aufgabe isoliert. Getrennt hat sie ein Systemprompt von fünftausend Token —
 das, was jeder echte Coding-Agent mitschickt. Unterwegs: ein Kernel-Panic, ein
 flackernder Bildschirm als einzige Warnung, die macOS je gab, und zehn Schlussfolgerungen,
@@ -25,6 +25,7 @@ Die einzige Variable, die zählte, war die Menge Systemprompt davor.
 | Modell | Auf Platte | Kurzer Prompt | Agenten-Prompt | + kaputtes Sampling |
 |---|---:|---:|---:|---:|
 | gpt-oss-20b MXFP4 | 12,08 GB | 6/6 | **6/6** | **6/6** |
+| Qwen3.5-9B 4-bit | 5,95 GB | — | — | — |
 | Devstral-Small-2-24B MXFP4 | 14,39 GB | 6/6 | passt nicht | — |
 | Qwen3.6-35B-A3B MLX 3-bit | 15,20 GB | 6/6 | 3/6 | 0/6 |
 
@@ -90,11 +91,14 @@ Keine erfundenen Features, keine überflüssigen Umbauten.
 
 Dieselbe Aufgabe für die anderen Modelle:
 
-| Modell | Runtime | Erfolg | Median | Schema-Fehler | Wired |
-|---|---|---:|---:|---:|---:|
-| gpt-oss-20b MXFP4 | MLX | **6/6** | 55 s | 1/41 | 16,1 GB · 67 % |
-| Devstral-Small-2-24B IQ4_XS | llama.cpp | 2/2 | 132 s | 0/12 | — |
-| Qwen3.6-35B-A3B 3-bit | MLX | 3/4 | 177 s | 0/31 | **20,2 GB · 84 %** |
+| Modell | Gewichte | Engine | Erfolg | Median | Schema-Fehler | Wired |
+|---|---:|---|---:|---:|---:|---:|
+| gpt-oss-20b MXFP4 | 12,08 GB | MLX | **6/6** | 55 s | 1/41 | 16,1 GB · 67 % |
+| **Qwen3.5-9B 4-bit** | **5,95 GB** | MLX | **5/6** | **57 s** | 0/28 | **9,4 GB · 39 %** |
+| Gemma 4 12B Q4_K_M | 7,38 GB | llama.cpp | 5/6 | 156 s | 0/30 | 12,3 GB · 51 % |
+| Devstral-Small-2-24B IQ4_XS | 12,76 GB | llama.cpp | 2/2 | 132 s | 0/12 | — |
+| Qwen3.6-35B-A3B 3-bit | 15,20 GB | MLX | 3/4 | 177 s | 0/31 | **20,2 GB · 84 %** |
+| Gemma 4 12B MLX-4bit | 6,74 GB | **MLX** | **0/6** | — | 0/16 | Engine defekt, s. Befund 5 |
 
 gpt-oss gewinnt auf allen drei Achsen zugleich: zuverlässiger, dreimal schneller, 17
 Prozentpunkte mehr Speicherreserve. Das Qwen-MoE ist trotz nur 3B aktiver von 35B
@@ -103,6 +107,27 @@ Parametern das langsamste — seine Fehlschläge sind teuer, ein schlechter Lauf
 
 Die Streuung ist erheblich: Lauf 5 kam mit 4 Toolcalls und 556 Reasoning-Tokens aus,
 Lauf 4 brauchte 2.605. Faktor 4,7 bei identischer Aufgabe. Einzelne Läufe sagen wenig.
+
+### Das kleinste Modell gewinnt fast
+
+Qwen3.5-9B ist das überraschendste Ergebnis der Reihe. Bei **halber Gewichtsgröße** von
+gpt-oss liegt es bei gleicher Geschwindigkeit, einen Lauf hinter dessen Zuverlässigkeit —
+und braucht **39 % statt 67 %** des Speichers. Ein 9B der neueren Generation schlägt ein
+35B der vorherigen deutlich, bei einem Fünftel des Speichers.
+
+Der eine Fehlschlag ist gutartig gebaut: Lauf 3 brach nach 4 Sekunden mit einem einzigen
+Toolcall und 107 Reasoning-Token ab — es führte die Tests einmal aus und hörte auf. Kein
+Schleifen, kein Token-Limit, keine degenerierte Ausgabe. Eine neue Session hätte gereicht.
+Das unterscheidet sich grundlegend von den Fehlschlägen des Qwen-MoE, die teuer waren und
+sich nicht abbrechen ließen.
+
+Bemerkenswert ist auch der Kontext: LM Studio vergab von sich aus **92.672 Token**, weil
+die hybride Attention die KV-Cache billig macht. Devstral bekam auf derselben Maschine
+4.864.
+
+Damit hat sich die Fragestellung der Untersuchung umgedreht. Sie begann mit „welches große
+Modell passt noch hinein" und endet bei **„welches kleinste Modell löst die Aufgabe
+zuverlässig"** — weil Speicherreserve auf dieser Maschine direkt in Stabilität umschlägt.
 
 ### Reasoning abschalten hilft nicht
 
@@ -124,11 +149,11 @@ ignoriert; nur das `/no_think`-Token in der Nachricht wirkt tatsächlich.)*
 
 ---
 
-## Befund 2 — Ein fehlerhafter Toolcall bei 128
+## Befund 2 — Ein fehlerhafter Toolcall bei 202
 
 Die Frage, mit der diese Untersuchung begann, war, ob 3-bit-Quantisierung Toolcall-
-Argumente beschädigt. Über die gesamte Reihe — vier Modelle, drei Promptgrößen, zwei
-Sampling-Regime, dazu die Reparaturaufgabe — ergaben **128 Toolcalls genau einen
+Argumente beschädigt. Über die gesamte Reihe — sechs Modelle, drei Promptgrößen, zwei
+Sampling-Regime, dazu die Reparaturaufgabe — ergaben **202 Toolcalls genau einen
 Schema-Fehler**: ein `write` mit vollständig leerem Argument-Objekt. Der Agent erholte
 sich im nächsten Schritt, der Lauf wurde trotzdem grün.
 
@@ -253,7 +278,54 @@ mit einem sauberen HTTP 400.
 
 ---
 
-## Befund 5 — Wired Memory ist eine Sprungfunktion, und die Pressure-Anzeige sieht sie nicht
+## Befund 5 — Die Engine entscheidet über Brauchbarkeit, nicht nur über Tempo
+
+Dreimal an einem Tag hat der Wechsel von MLX auf llama.cpp ein Modell von „unbrauchbar"
+zu „funktioniert" gedreht. Jedes Mal sah der Fehler im Log wie Modellversagen aus.
+
+| Modell | unter MLX | unter GGUF |
+|---|---|---|
+| Devstral-Small-2-24B | Kontext still auf 4.864 gedeckelt | 16.384 wie angefordert |
+| Qwen3.6-27B | Guardrail verweigert das Laden komplett | lädt mit vollem Kontext |
+| Gemma 4 12B | **0/6** — Kanal-Marker-Schleife | **5/6** |
+
+Der Gemma-Fall ist der klarste, weil dasselbe Modell mit derselben Aufgabe, demselben
+Harness und denselben Sampling-Werten gemessen wurde — die Engine war die einzige Variable.
+
+Unter LM Studios MLX-Pfad lecken Gemmas Kanal-Marker als Rohtext in `content`:
+
+```
+<|channel>thought
+<channel|>
+```
+
+Anfangs sind es 28 Zeichen. Nach dem Schritt, der `duration.py` einliest, degeneriert die
+Generierung in eine reine Marker-Schleife — **49.258 Zeichen, 8.191 Tokens, Length-Stop**,
+in zwei unabhängigen Durchläufen an exakt derselben Stelle. `reasoning_tokens` meldete
+durchgehend 0.
+
+Meine erste Erklärung war eine Rückkopplung: mein Harness schreibt den Content als
+Assistant-Nachricht zurück, das Modell sieht seine eigenen kaputten Marker und produziert
+mehr davon. Die Gegenprobe widerlegte das — mit herausgefilterten Markern (bereinigter
+Content: 0 Zeichen in allen Schritten) kippte es an derselben Stelle erneut. Die Schleife
+entsteht neu, nicht durch Rückkopplung.
+
+Unter llama.cpp verschwindet das Problem vollständig: kein einziger Marker, und
+`reasoning_tokens` liegt bei 225 bis 2.797. Was dort korrekt als Reasoning erkannt und
+abgetrennt wird, ist unter MLX der Müll, der die Ausgabe sprengt — zwei Seiten derselben
+Sache.
+
+**Der Preis ist Tempo.** llama.cpp nutzt die Neural Accelerators des M5 nicht und liegt
+rund 2,4× hinter MLX. Gemma braucht unter GGUF 156 s im Median gegen 55 s für gpt-oss
+unter MLX, mit erheblicher Streuung: vier saubere Läufe zwischen 146 und 164 Sekunden,
+dazu ein Ausreißer mit 1.226 Sekunden.
+
+Für Modelle, die unter MLX sauber laufen, bleibt MLX die bessere Wahl. Aber wenn ein
+Modell sich merkwürdig verhält, ist der Engine-Wechsel der erste Test — nicht der letzte.
+
+---
+
+## Befund 6 — Wired Memory ist eine Sprungfunktion, und die Pressure-Anzeige sieht sie nicht
 
 MLX lädt Safetensors per `mmap`. Im Leerlauf sind diese Seiten file-backed — active oder
 inactive, nicht wired. Sobald die Inferenz startet, verdrahtet die GPU sie, und der
@@ -284,7 +356,7 @@ Das Plateau liegt grob bei **Gewichte + 2–3 GB** über dem, was das System ohn
 
 ---
 
-## Befund 6 — Man kann das ganze Speicherproblem wegtauschen, gegen Latenz
+## Befund 7 — Man kann das ganze Speicherproblem wegtauschen, gegen Latenz
 
 Alles bisherige kämpft um Luft innerhalb von 24 GB.
 [TurboFieldfare](https://github.com/drumih/turbo-fieldfare) umgeht den Kampf: eine
@@ -335,7 +407,7 @@ OpenAI-kompatible Server am 27., Long-Context-Prefill am 29. — fünf Releases 
 
 ---
 
-## Befund 7 — Der Kernel-Panic ist ein ungelöster Apple-Bug, nicht MLX
+## Befund 8 — Der Kernel-Panic ist ein ungelöster Apple-Bug, nicht MLX
 
 Mitten in der Sitzung ging die Maschine hart zu Boden:
 
@@ -391,7 +463,7 @@ KV-Cache. Diese Schleife existierte wegen der Sampling-Fehlkonfiguration aus Bef
 
 ---
 
-## Befund 8 — Drei Korrekturen, die es messbar schlechter machten
+## Befund 9 — Drei Korrekturen, die es messbar schlechter machten
 
 | Änderung | Absicht | Erfolg | Was passierte |
 |---|---|---:|---|
@@ -412,7 +484,7 @@ Completion-Token, und vollständige Completions erreichten 2.361.
 
 ---
 
-## Befund 9 — Werkzeugverhalten, das jeweils eine Stunde kostet
+## Befund 10 — Werkzeugverhalten, das jeweils eine Stunde kostet
 
 ### LM Studio
 
@@ -473,7 +545,7 @@ Kontrollexperiment.
 |---|---|---|
 | 09:58 | „Wired läuft weg" | Anlauframpe zu einem flachen Plateau, 30 MB Drift. Messung ohne Grund abgebrochen |
 | 10:07 | „Output-Budget zu klein" | Direkter API-Aufruf lieferte einen sauberen Toolcall in 118 Token |
-| 10:28 | „Die 3-bit-Quantisierung ist defekt" | Echte Belege, falsche Deutung: es war das Sampling. 1 Fehler bei 128 Toolcalls |
+| 10:28 | „Die 3-bit-Quantisierung ist defekt" | Echte Belege, falsche Deutung: es war das Sampling. 1 Fehler bei 202 Toolcalls |
 | 10:37 | „Promptgröße ist irrelevant" | Galt nur unter kaputtem Sampling. Mit korrektem war sie der stärkste Prädiktor |
 | 10:53 | „max_tokens 2048 reicht" | Eigene Tabelle falsch gelesen: 70–210 waren Reasoning-, nicht Completion-Token |
 | 11:15 | „Es war das Sampling" *(veröffentlicht)* | Kontrolle gegen gpt-oss: 6/6 mit derselben kaputten Konfiguration |
@@ -508,7 +580,7 @@ endlich machte.
   bei 32k oder darunter; mlx #3186 reproduziert seinen Panic bei ~173k Prefill.
 - Wie sich das über eine einzelne Datei hinaus skaliert. Die Reparaturaufgabe ist echt,
   aber klein.
-- Ob große Toolcall-Argumente das Schema-Fehler-Risiko treiben. Ein Vorkommnis bei 128 ist
+- Ob große Toolcall-Argumente das Schema-Fehler-Risiko treiben. Ein Vorkommnis bei 202 ist
   eine Hypothese, kein Ergebnis.
 - Warum `opencode run` vor der Session-Erstellung hängt, während der TUI funktioniert.
 
