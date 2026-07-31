@@ -92,6 +92,29 @@
         "of": 6,
         "note": "token-ID-0 loop, 8191 reasoning tokens per run"
       }
+    },
+    "Qwen3.5-9B-MLX-4bit": {
+      "runtime": "MLX",
+      "weights_gb": 5.95,
+      "context_granted": 92672,
+      "large_prompt": {
+        "passed": 6,
+        "of": 6,
+        "median_s": 8.3,
+        "tool_calls": 19,
+        "schema_errors": 0,
+        "runs_without_tool_call": 0,
+        "length_stops": 0,
+        "reasoning_tokens": [
+          145,
+          158,
+          213,
+          141,
+          130,
+          138
+        ],
+        "note": "Fastest of all models under the agent-sized prompt: 8.3 s median against 16.4 s for gpt-oss."
+      }
     }
   },
   "repair_task": {

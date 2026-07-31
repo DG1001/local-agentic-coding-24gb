@@ -396,7 +396,7 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Six models, 202 tool calls, six identical runs per configuration. Every model
+    <p class="standfirst">Six models, 221 tool calls, six identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
@@ -436,6 +436,13 @@
         </thead>
         <tbody>
           <tr>
+            <th><strong>Qwen3.5-9B 4-bit</strong></th>
+            <td class="num">5.95 GB</td>
+            <td class="num">—</td>
+            <td class="num"><span class="pill ok">6 / 6</span> · 8.3 s</td>
+            <td class="num">—</td>
+          </tr>
+          <tr>
             <th>gpt-oss-20b MXFP4</th>
             <td class="num">12.08 GB</td>
             <td class="num"><span class="pill ok">6 / 6</span></td>
@@ -462,8 +469,8 @@
 
     <div class="col">
       <p>Read the first data column and every model looks fine — 9 to 12 seconds per completed task, not
-      one malformed tool call, nothing to choose between them. Read the last two and only
-      <code>gpt-oss-20b</code> is still standing.</p>
+      one malformed tool call, nothing to choose between them. Read the agent-prompt column and two of
+      four are left — and the faster of the two is the 5.95 GB model.</p>
 
       <p>This is why "it works on my machine" reports about local coding models are so unreliable. A
       quick manual test uses a short prompt. An actual agent does not.</p>
@@ -612,10 +619,10 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
 
   <section id="quant">
     <div class="col">
-      <h2><span class="num">Finding 2</span>One malformed tool call in 202</h2>
+      <h2><span class="num">Finding 2</span>One malformed tool call in 221</h2>
       <p>The question that started this investigation was whether 3-bit quantisation was corrupting tool
       arguments. Across the whole study — six models, three prompt sizes, two sampling regimes, plus
-      the repair task — <strong>202 tool calls produced exactly one schema failure</strong>: a
+      the repair task — <strong>221 tool calls produced exactly one schema failure</strong>: a
       <code>write</code> with a completely empty arguments object. The agent recovered on the next step
       and the run still went green.</p>
       <p>The harness validated this itself rather than trusting the agent framework, declaring the JSON

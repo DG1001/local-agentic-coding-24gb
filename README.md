@@ -3,7 +3,7 @@
 Measurements and tooling for one question: which local model is actually usable for
 agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Six models, 202 tool calls, six identical runs per configuration, measured on an Apple
+Six models, 221 tool calls, six identical runs per configuration, measured on an Apple
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
@@ -24,6 +24,8 @@ send.
 
 **The smallest model nearly wins.** Qwen3.5-9B matches gpt-oss on speed at half the
 weights, trails it by one run on reliability, and needs 39 % of memory instead of 67 %.
+Under the agent-sized system prompt it scores **6/6 at an 8.3 s median** — twice as fast
+as gpt-oss on the same test.
 
 **And for three of six models, the inference engine decided usability.** MLX capped
 Devstral's context at 4,864, refused to load Qwen3.6-27B at all, and broke on Gemma's
@@ -132,7 +134,7 @@ agent framework. That is why it exists: the investigation started with `SchemaEr
 messages from OpenCode, and the framework turned out to be the cause twice. A harness
 with no layer in between separates model behaviour from tool behaviour.
 
-Result across the whole series: **one malformed tool call in 202.**
+Result across the whole series: **one malformed tool call in 221.**
 
 ## Requirements
 

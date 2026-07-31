@@ -2,7 +2,7 @@
 
 *Field notes — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Six models, 202 tool calls, six identical runs per configuration. Every model aced the
+Six models, 221 tool calls, six identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
 desktop as the only warning macOS ever gave, and eleven confident conclusions I had to
@@ -24,7 +24,8 @@ The only variable that mattered was how much system prompt sat in front of that 
 
 | Model | On disk | Small prompt | Agent prompt | + broken sampling |
 |---|---:|---:|---:|---:|
-| gpt-oss-20b MXFP4 | 12.08 GB | 6/6 | **6/6** | **6/6** |
+| **Qwen3.5-9B 4-bit** | **5.95 GB** | — | **6/6** · 8.3 s | — |
+| gpt-oss-20b MXFP4 | 12.08 GB | 6/6 | **6/6** · 16.4 s | **6/6** |
 | Devstral-Small-2-24B MXFP4 | 14.39 GB | 6/6 | won't fit | — |
 | Qwen3.6-35B-A3B MLX 3-bit | 15.20 GB | 6/6 | 3/6 | 0/6 |
 
@@ -32,8 +33,8 @@ The only variable that mattered was how much system prompt sat in front of that 
 tokens of plausible instructions — the size OpenCode, aider and crush actually send.
 
 Read the first column and every model looks fine: 9 to 12 seconds per task, not one
-malformed tool call, nothing to choose between them. Read the last two and only gpt-oss
-is still standing.
+malformed tool call, nothing to choose between them. Read the agent-prompt column and
+two of four are left.
 
 **This is why "it works on my machine" reports about local coding models are so
 unreliable.** A quick manual test uses a short prompt. An agent does not.
@@ -55,6 +56,15 @@ iogpu.wired_limit_mb  leave at 0
 Measured: 6/6 under a realistic agent prompt, 16.4 s median, 16.11 GB wired (67 %), loads
 in 6.1 seconds. Confirmed end-to-end in OpenCode's interactive TUI, which built a working
 three-file todo app from a single instruction.
+
+Under the agent-sized prompt Qwen3.5-9B is not merely adequate but the fastest of the
+set: **6/6 at an 8.3 s median**, 19 tool calls, no schema errors, no run without a tool
+call, no length stop — against gpt-oss's 16.4 s on the identical test. At 5.95 GB of
+weights.
+
+That matters beyond this benchmark. Agent harnesses state context requirements: Hermes,
+for instance, asks for at least 64K. At that length gpt-oss needs 67 % of memory and
+Qwen3.5-9B 44 % — both qualify, one with room to spare.
 
 ---
 
@@ -123,11 +133,11 @@ only the `/no_think` token in the message actually takes effect.)*
 
 ---
 
-## Finding 2 — One malformed tool call in 202
+## Finding 2 — One malformed tool call in 221
 
 The question that started this investigation was whether 3-bit quantisation was
 corrupting tool arguments. Across the whole study — six models, three prompt sizes, two
-sampling regimes, plus the repair task — **202 tool calls produced exactly one schema
+sampling regimes, plus the repair task — **221 tool calls produced exactly one schema
 failure**: a `write` with a completely empty arguments object. The agent recovered on the
 next step and the run still went green.
 
@@ -492,7 +502,7 @@ than the individual cases: a real symptom, a plausible cause, no control experim
 |---|---|---|
 | 09:58 | "wired memory is running away" | ramp to a flat plateau, 30 MB drift. Aborted a valid measurement for nothing |
 | 10:07 | "the output budget is too small" | a direct API call returned a clean tool call in 118 tokens |
-| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 202 tool calls |
+| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 221 tool calls |
 | 10:37 | "system prompt size is irrelevant" | true only under broken sampling. With it fixed, prompt size was the strongest predictor |
 | 10:53 | "max_tokens 2048 is enough" | misread my own table: 70–210 were reasoning, not completion tokens |
 | 11:15 | "it was the sampling" *(published)* | control against gpt-oss: 6/6 with the same broken config |
