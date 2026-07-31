@@ -63,7 +63,7 @@
       "large_prompt": {
         "passed": null,
         "of": 6,
-        "note": "Prompt uebersteigt den auf 4864 gedeckelten Kontext, HTTP 400 vor dem ersten Token"
+        "note": "prompt exceeds the context capped at 4864; HTTP 400 before the first token"
       }
     },
     "Qwen3.6-35B-A3B-3bit": {
@@ -90,7 +90,7 @@
       "large_prompt_broken_sampling": {
         "passed": 0,
         "of": 6,
-        "note": "token-ID-0-Schleife, 8191 Reasoning-Tokens pro Lauf"
+        "note": "token-ID-0 loop, 8191 reasoning tokens per run"
       }
     }
   },
@@ -169,7 +169,7 @@
       "tool_calls": 12,
       "schema_errors": 0,
       "tests_untouched": "2/2",
-      "note": "Serie nach zwei Laeufen abgebrochen. Nur der GGUF-Weg erlaubte 16k Kontext."
+      "note": "series stopped after two runs. Only the GGUF route allowed 16k context."
     },
     "Qwen3.6-35B-A3B-3bit": {
       "runtime": "MLX",
@@ -196,14 +196,14 @@
           "reasoning": 1134,
           "wall_s": 251.0,
           "green": true,
-          "note": "in die degenerierte Schleife geraten und wieder herausgefunden"
+          "note": "entered the degenerate loop and found its way back out"
         },
         {
           "steps": 2,
           "reasoning": 8211,
           "wall_s": 109.1,
           "green": false,
-          "note": "token-ID-0-Schleife trotz korrektem Sampling"
+          "note": "token-ID-0 loop despite correct sampling"
         },
         {
           "steps": 14,
@@ -225,7 +225,7 @@
       "cached_tokens": 12642,
       "prompt_tokens": 20087,
       "invalid": true,
-      "note": "NICHT als Faehigkeitsmessung verwertbar: waehrend eines Teils der Serie war zusaetzlich gpt-oss geladen, und jeder Lauf lief in einen HTTP 500. Unabhaengig davon gilt: das Modell rief 18-mal bash und kein einziges Mal write auf."
+      "note": "NOT usable as a capability measurement: gpt-oss was additionally resident during part of the series, and every run hit an HTTP 500. Independently of that: the model called bash 18 times and write not once."
     },
     "Qwen3.5-9B-MLX-4bit": {
       "runtime": "MLX",
@@ -269,7 +269,7 @@
           "reasoning": 107,
           "wall_s": 4.0,
           "green": false,
-          "note": "nach einem Toolcall aufgegeben - gutartiger Fehlermodus, keine Schleife"
+          "note": "gave up after one tool call - benign failure mode, no loop"
         },
         {
           "steps": 5,
@@ -318,7 +318,7 @@
         4161
       ],
       "invalid_as_capability_measurement": true,
-      "note": "MISST DIE ENGINE, NICHT DAS MODELL. LM Studios MLX-Pfad filtert Gemma 4s Kanal-Marker nicht: '<|channel>thought<channel|>' leckt als Rohtext in content. Nach dem Schritt, der duration.py einliest, degeneriert die Generierung in eine reine Marker-Schleife (49.258 Zeichen). Reproduziert in zwei unabhaengigen Durchlaeufen an derselben Stelle. Filtern der Marker vor dem Zurueckschreiben in die Historie half nicht - die Schleife entsteht neu, nicht durch Rueckkopplung. reasoning_tokens durchgehend 0."
+      "note": "MEASURES THE ENGINE, NOT THE MODEL. LM Studio's MLX path does not filter Gemma 4's channel markers: '<|channel>thought<channel|>' leaks into content as raw text. After the step that reads duration.py, generation degenerates into a pure marker loop (49,258 characters). Reproduced in two independent runs at the same point. Stripping the markers before writing them back into the history did not help - the loop is generated fresh, not fed back. reasoning_tokens was 0 throughout."
     },
     "gemma-4-12B-it-GGUF-Q4_K_M": {
       "runtime": "llama.cpp (LM Studio)",
@@ -338,7 +338,7 @@
       "wired_median_gb": 11.18,
       "wired_peak_gb": 12.3,
       "wired_peak_pct": 51,
-      "note": "Identisches Modell, identische Aufgabe, identisches Sampling - nur andere Engine. Keine Kanal-Marker, reasoning_tokens 225-2797 (korrekt abgetrennt). Hohe Streuung: vier saubere Laeufe 146-164 s, dazu ein Fehlschlag (318 s) und ein Ausreisser (1226 s).",
+      "note": "Identical model, task and sampling - only the engine differs. No channel markers, reasoning_tokens 225-2797 (correctly separated). High variance: four clean runs at 146-164 s, plus one failure (318 s) and one outlier (1226 s).",
       "runs": [
         {
           "steps": 6,
@@ -444,7 +444,7 @@
       "kv_heads": 8,
       "head_dim": 128,
       "kb_per_token": 160,
-      "note": "aeltere Generation, keine hybride Attention"
+      "note": "older generation, no hybrid attention"
     }
   },
   "wired_memory_trace": {
@@ -502,7 +502,7 @@
         19456
       ],
       "granted": 4864,
-      "note": "still gekuerzt, keine Warnung"
+      "note": "silently reduced, no warning"
     },
     "Devstral-GGUF-IQ4_XS": {
       "requested": 16384,
@@ -515,30 +515,30 @@
         4096
       ],
       "granted": null,
-      "note": "Laden komplett verweigert (Guardrail)"
+      "note": "load refused entirely (guardrail)"
     },
     "Devstral-mlx_lm.server": {
       "granted": 13728,
-      "note": "Kontext funktioniert, aber Toolcalls werden nicht ausgeliefert"
+      "note": "context works, but tool calls are never delivered"
     }
   },
   "engine_matters": {
     "_comment": "Three models where the choice of inference engine decided usability. Every time, the failure looked like a model failure in the log.",
     "Devstral-Small-2-24B": {
-      "mlx": "Kontext auf 4864 gedeckelt",
-      "gguf": "16384 wie angefordert",
+      "mlx": "context capped at 4864",
+      "gguf": "16384 as requested",
       "verdict": "GGUF"
     },
     "gemma-4-12B-it": {
-      "mlx": "Kanal-Marker-Schleife, 0/6",
+      "mlx": "channel-marker loop, 0/6",
       "gguf": "5/6",
       "verdict": "GGUF"
     },
     "Qwen3.6-27B": {
-      "mlx": "Guardrail verweigert das Laden komplett",
-      "gguf": "laedt mit vollem Kontext",
+      "mlx": "guardrail refuses to load at all",
+      "gguf": "loads at full context",
       "verdict": "GGUF"
     },
-    "cost": "llama.cpp liegt auf Apple Silicon rund 2,4x hinter MLX, weil es die Neural Accelerators nicht nutzt."
+    "cost": "On Apple Silicon llama.cpp runs roughly 2.4x behind MLX because it does not use the neural accelerators."
   }
 }
