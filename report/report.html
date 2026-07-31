@@ -1,0 +1,1467 @@
+<title>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</title>
+
+<style>
+  :root {
+    color-scheme: light;
+    --ground:    #f7f5fa;
+    --raised:    #fffdff;
+    --ink:       #16131d;
+    --muted:     #5c5568;
+    --hairline:  #e3dfe9;
+    --hairline-2:#d3cede;
+    --accent:    #4a3aa7;
+    --accent-dim:#ece8f6;
+    --warn:      #a8500c;
+    --warn-bg:   #fbf0e6;
+    --ok:        #16624c;
+    --ok-bg:     #e7f2ed;
+    --bad:       #9b1f33;
+    --bad-bg:    #fbeced;
+
+    --sans: -apple-system, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    --serif: Charter, "Bitstream Charter", "Iowan Old Style", Georgia, "Times New Roman", serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Cascadia Mono", Consolas, monospace;
+
+    --measure: 66ch;
+    --step--1: 0.813rem;
+    --step-0:  1.0625rem;
+    --step-1:  1.28rem;
+    --step-2:  1.62rem;
+    --step-3:  2.15rem;
+    --step-4:  3.05rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --ground:    #17141d;
+      --raised:    #1f1b28;
+      --ink:       #e9e6ef;
+      --muted:     #a9a2b8;
+      --hairline:  #2b2635;
+      --hairline-2:#3a3348;
+      --accent:    #9085e9;
+      --accent-dim:#241f36;
+      --warn:      #e0a06a;
+      --warn-bg:   #2c2118;
+      --ok:        #6cc4a4;
+      --ok-bg:     #14261f;
+      --bad:       #f08494;
+      --bad-bg:    #2d1720;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground:    #17141d;
+    --raised:    #1f1b28;
+    --ink:       #e9e6ef;
+    --muted:     #a9a2b8;
+    --hairline:  #2b2635;
+    --hairline-2:#3a3348;
+    --accent:    #9085e9;
+    --accent-dim:#241f36;
+    --warn:      #e0a06a;
+    --warn-bg:   #2c2118;
+    --ok:        #6cc4a4;
+    --ok-bg:     #14261f;
+    --bad:       #f08494;
+    --bad-bg:    #2d1720;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --ground:    #f7f5fa;
+    --raised:    #fffdff;
+    --ink:       #16131d;
+    --muted:     #5c5568;
+    --hairline:  #e3dfe9;
+    --hairline-2:#d3cede;
+    --accent:    #4a3aa7;
+    --accent-dim:#ece8f6;
+    --warn:      #a8500c;
+    --warn-bg:   #fbf0e6;
+    --ok:        #16624c;
+    --ok-bg:     #e7f2ed;
+    --bad:       #9b1f33;
+    --bad-bg:    #fbeced;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: var(--step-0);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 74rem;
+    margin: 0 auto;
+    padding: clamp(1.5rem, 4vw, 4rem) clamp(1.25rem, 4vw, 3rem) 6rem;
+  }
+
+  .col { max-width: var(--measure); }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1.25rem;
+  }
+
+  h1 {
+    font-family: var(--sans);
+    font-size: var(--step-4);
+    font-weight: 700;
+    letter-spacing: -0.028em;
+    line-height: 1.04;
+    text-wrap: balance;
+    max-width: 30ch;
+    margin-bottom: 1.25rem;
+  }
+
+  .standfirst {
+    font-size: var(--step-1);
+    line-height: 1.5;
+    color: var(--muted);
+    max-width: 56ch;
+    text-wrap: pretty;
+  }
+
+  .factstrip {
+    margin-top: 2.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--hairline-2);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 2.5rem;
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    color: var(--muted);
+  }
+  .factstrip b {
+    display: block;
+    color: var(--ink);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .factstrip > div { padding: 0.5rem 0; }
+
+  section { margin-top: clamp(3rem, 6vw, 5rem); }
+
+  h2 {
+    font-family: var(--sans);
+    font-size: var(--step-3);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+    text-wrap: balance;
+    max-width: 34ch;
+    margin-bottom: 0.9rem;
+  }
+  h2 .num {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.6rem;
+    text-transform: uppercase;
+  }
+
+  h3 {
+    font-family: var(--sans);
+    font-size: var(--step-1);
+    font-weight: 650;
+    letter-spacing: -0.011em;
+    margin: 2.25rem 0 0.6rem;
+    text-wrap: balance;
+  }
+
+  p { margin-bottom: 1.1rem; text-wrap: pretty; }
+  p:last-child { margin-bottom: 0; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 0.15em; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: var(--accent-dim);
+    padding: 0.1em 0.34em;
+    border-radius: 3px;
+    word-break: break-word;
+  }
+
+  pre {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    line-height: 1.55;
+    background: var(--raised);
+    border: 1px solid var(--hairline);
+    border-left: 2px solid var(--accent);
+    padding: 1rem 1.15rem;
+    overflow-x: auto;
+    margin: 1.35rem 0;
+    max-width: 100%;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  ul, ol { margin: 0 0 1.1rem 1.35rem; }
+  li { margin-bottom: 0.5rem; }
+  li::marker { color: var(--muted); }
+
+  .callout {
+    border: 1px solid var(--hairline-2);
+    background: var(--raised);
+    padding: 1.15rem 1.3rem;
+    margin: 1.5rem 0;
+    max-width: 72ch;
+  }
+  .callout .label {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+  }
+  .callout.key { border-left: 3px solid var(--accent); }
+  .callout.key .label { color: var(--accent); }
+  .callout.warn { border-left: 3px solid var(--warn); background: var(--warn-bg); }
+  .callout.warn .label { color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .tablewrap { overflow-x: auto; margin: 1.5rem 0; max-width: 100%; }
+
+  table {
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    font-variant-numeric: tabular-nums;
+    min-width: 100%;
+    white-space: nowrap;
+  }
+  caption {
+    text-align: left;
+    font-family: var(--sans);
+    font-size: var(--step--1);
+    font-weight: 600;
+    color: var(--muted);
+    padding-bottom: 0.6rem;
+    white-space: normal;
+    max-width: 70ch;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 1.15rem 0.5rem 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  thead th {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.78rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--hairline-2);
+  }
+  td.num, th.num { text-align: right; padding-right: 1.15rem; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody th { font-weight: 500; }
+
+  .pill {
+    display: inline-block;
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.14em 0.5em;
+    border-radius: 2px;
+  }
+  .pill.ok  { color: var(--ok);   background: var(--ok-bg);  }
+  .pill.bad { color: var(--bad);  background: var(--bad-bg); }
+  .pill.mid { color: var(--warn); background: var(--warn-bg);}
+
+  figure { margin: 2rem 0; max-width: 100%; }
+  figcaption {
+    font-family: var(--sans);
+    font-size: var(--step--1);
+    color: var(--muted);
+    margin-top: 0.8rem;
+    max-width: 62ch;
+    text-wrap: pretty;
+  }
+  .chartcard {
+    background: var(--raised);
+    border: 1px solid var(--hairline);
+    padding: 1.25rem 1.25rem 0.75rem;
+  }
+  .charthead {
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    font-weight: 650;
+    margin-bottom: 0.15rem;
+  }
+  .chartsub {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+  .canvasbox { position: relative; }
+  canvas { display: block; width: 100%; height: auto; }
+
+  #tip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--ink);
+    color: var(--ground);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    padding: 0.35rem 0.55rem;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.1s;
+    white-space: nowrap;
+    z-index: 3;
+  }
+  @media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
+
+  details {
+    border-top: 1px solid var(--hairline);
+    padding-top: 0.9rem;
+    margin-top: 1.25rem;
+  }
+  summary {
+    font-family: var(--sans);
+    font-size: var(--step--1);
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  summary:hover { color: var(--accent); }
+
+  .log { margin-top: 1.5rem; }
+  .entry {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: 0 1.5rem;
+    padding: 1.35rem 0;
+    border-top: 1px solid var(--hairline);
+    align-items: start;
+  }
+  .entry:last-child { border-bottom: 1px solid var(--hairline); }
+  .stamp {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    padding-top: 0.2em;
+  }
+  .entry h4 {
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    font-weight: 650;
+    margin-bottom: 0.35rem;
+    text-wrap: balance;
+  }
+  .entry p { font-size: 0.97rem; margin-bottom: 0.6rem; }
+  .entry .col { max-width: 62ch; }
+
+  @media (max-width: 34rem) {
+    .entry { grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
+  }
+
+  hr.rule { border: none; border-top: 1px solid var(--hairline-2); margin: 3.5rem 0 0; }
+
+  footer {
+    margin-top: 3rem;
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    color: var(--muted);
+    max-width: 64ch;
+  }
+  footer p { margin-bottom: 0.7rem; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
+    <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
+    <p class="standfirst">Three models, 128 tool calls, six identical runs per configuration. Every model
+    aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
+    every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
+    at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
+    macOS ever gave, and ten confident conclusions I had to retract.</p>
+
+    <div class="factstrip">
+      <div>Machine<b>Apple M5 Pro · 15 cores</b></div>
+      <div>Unified memory<b>24 GB (25,769,803,776 B)</b></div>
+      <div>OS<b>macOS 26.6 · build 25G72</b></div>
+      <div>Stack<b>LM Studio 0.4.20 · MLX · OpenCode 1.18.9</b></div>
+    </div>
+  </header>
+
+  <section id="headline">
+    <div class="col">
+      <h2><span class="num">The result</span>All three models pass the easy test. Only one passes the real one.</h2>
+      <p>The task was identical throughout: write <code>greet.py</code> with a <code>greet(name)</code>
+      function, run it with <code>python3</code>, verify the output, fix it if wrong. Two tools available,
+      <code>bash</code> and <code>write</code>. Six runs per configuration, success measured by actually
+      importing the resulting file and calling the function.</p>
+      <p>The only variable that mattered was how much system prompt sat in front of that task.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Task verified, 6 runs per cell. "Small" is a one-sentence system prompt (245 prompt
+        tokens); "large" is ~5,600 tokens of plausible agent instructions — the size OpenCode, aider and
+        crush actually send. Sampling: temp 0.6 / top_p 0.95 / top_k 20 / rep 1.05.</caption>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th class="num">On disk</th>
+            <th class="num">Small prompt</th>
+            <th class="num">Large prompt</th>
+            <th class="num">Large + broken sampling</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>gpt-oss-20b MXFP4</th>
+            <td class="num">12.08 GB</td>
+            <td class="num"><span class="pill ok">6 / 6</span></td>
+            <td class="num"><span class="pill ok">6 / 6</span></td>
+            <td class="num"><span class="pill ok">6 / 6</span></td>
+          </tr>
+          <tr>
+            <th>Devstral-Small-2-24B MXFP4</th>
+            <td class="num">14.39 GB</td>
+            <td class="num"><span class="pill ok">6 / 6</span></td>
+            <td class="num"><span class="pill bad">won't fit</span></td>
+            <td class="num">—</td>
+          </tr>
+          <tr>
+            <th>Qwen3.6-35B-A3B MLX 3-bit</th>
+            <td class="num">15.20 GB</td>
+            <td class="num"><span class="pill ok">6 / 6</span></td>
+            <td class="num"><span class="pill mid">3 / 6</span></td>
+            <td class="num"><span class="pill bad">0 / 6</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Read the first data column and every model looks fine — 9 to 12 seconds per completed task, not
+      one malformed tool call, nothing to choose between them. Read the last two and only
+      <code>gpt-oss-20b</code> is still standing.</p>
+
+      <p>This is why "it works on my machine" reports about local coding models are so unreliable. A
+      quick manual test uses a short prompt. An actual agent does not.</p>
+    </div>
+
+    <div class="callout key">
+      <div class="label">If you want the config and nothing else</div>
+<pre><code>model              gpt-oss-20b MXFP4        (12.08 GB)
+context            32768
+temperature        0.6      // see Finding 3 — may not matter
+top_p              0.95
+top_k              20
+repetition_penalty 1.05
+tool_choice        "auto"   // NEVER "required"
+max_tokens         8192     // completions reach ~2400
+iogpu.wired_limit_mb  leave at 0</code></pre>
+      <p>Measured: 6/6 task success under a realistic agent prompt, 16.4 s median, 16.11 GB wired
+      (67 % of physical), loads in 6.1 seconds. Confirmed end-to-end in OpenCode's interactive TUI,
+      which built a working three-file todo app from a single instruction.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Detail for the large-prompt runs, where the models actually diverge</caption>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th class="num">gpt-oss-20b</th>
+            <th class="num">Qwen3.6-35B-A3B 3-bit</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Task verified</td><td class="num">6 / 6</td><td class="num">3 / 6</td></tr>
+          <tr><td>Runs that never called a tool</td><td class="num">0</td><td class="num">3</td></tr>
+          <tr><td>Runs that hit the token limit</td><td class="num">0</td><td class="num">2</td></tr>
+          <tr><td>Tool calls emitted</td><td class="num">21</td><td class="num">7</td></tr>
+          <tr><td>Schema errors</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>Median wall time</td><td class="num">16.4 s</td><td class="num">28.7 s</td></tr>
+          <tr><td>Median reasoning tokens</td><td class="num">274</td><td class="num">158</td></tr>
+          <tr><td>Resident size</td><td class="num">11.27 GiB</td><td class="num">14.16 GiB</td></tr>
+          <tr><td>Wired plateau under load</td><td class="num">16.11 GB · 67 %</td><td class="num">19.29 GB · 80 %</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Note the failure mode. gpt-oss's worst run took eight steps and seven tool calls — it got
+      tangled and <strong>worked itself back out</strong>. The Qwen MoE never did that once: its three
+      failures were terminal, generating tokens straight into the limit. Two of them burned the full
+      8,191.</p>
+    </div>
+  </section>
+
+  <section id="real">
+    <div class="col">
+      <h2><span class="num">Finding 1</span>It holds up on real work</h2>
+      <p>Everything above uses a deliberately tiny task, which proves less than it looks like. So the
+      last test was a small but genuine repair job: an existing 100-line ISO-8601 duration module with a
+      22-test suite, seven of them failing, from <strong>three independent bugs</strong> in different
+      places — a missing feature (week designators absent from both the regex and the unit table), a
+      crash (<code>int()</code> on fractional values), and a logic error (the sign captured but never
+      applied). Instruction: make the suite pass, do not touch the tests.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>gpt-oss-20b, six runs, starting from 15/22 passing every time</caption>
+        <thead>
+          <tr><th class="num">Run</th><th class="num">Steps</th><th class="num">bash</th><th class="num">write</th><th class="num">Schema errors</th><th class="num">Reasoning tok</th><th class="num">Final</th><th>Tests file</th><th class="num">Wall s</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="num">10</td><td class="num">7</td><td class="num">2</td><td class="num">1</td><td class="num">1,548</td><td class="num">22/22</td><td>untouched</td><td class="num">63.7</td></tr>
+          <tr><td class="num">2</td><td class="num">9</td><td class="num">7</td><td class="num">1</td><td class="num">0</td><td class="num">1,967</td><td class="num">22/22</td><td>untouched</td><td class="num">53.9</td></tr>
+          <tr><td class="num">3</td><td class="num">7</td><td class="num">5</td><td class="num">1</td><td class="num">0</td><td class="num">719</td><td class="num">22/22</td><td>untouched</td><td class="num">37.1</td></tr>
+          <tr><td class="num">4</td><td class="num">8</td><td class="num">6</td><td class="num">1</td><td class="num">0</td><td class="num">2,605</td><td class="num">22/22</td><td>untouched</td><td class="num">63.0</td></tr>
+          <tr><td class="num">5</td><td class="num">5</td><td class="num">3</td><td class="num">1</td><td class="num">0</td><td class="num">556</td><td class="num">22/22</td><td>untouched</td><td class="num">27.8</td></tr>
+          <tr><td class="num">6</td><td class="num">8</td><td class="num">6</td><td class="num">1</td><td class="num">0</td><td class="num">2,131</td><td class="num">22/22</td><td>untouched</td><td class="num">56.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>Six for six, median 55 seconds.</strong> All three bugs found and fixed in a single
+      pass each time. The tests were never modified — worth checking explicitly, because editing the
+      test suite is the obvious shortcut and models do take it.</p>
+
+      <p>The other two models ran the identical task, same harness, same sampling:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Same repair task, same harness, same sampling. Devstral could only run here after
+        switching it from MLX to GGUF — see Finding 4.</caption>
+        <thead>
+          <tr><th>Model</th><th>Runtime</th><th class="num">Verified</th><th class="num">Median time</th><th class="num">Schema errors</th><th class="num">Wired peak</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>gpt-oss-20b MXFP4</th><td>MLX</td><td class="num"><span class="pill ok">6 / 6</span></td><td class="num">55 s</td><td class="num">1 / 41</td><td class="num">16.1 GB · 67 %</td></tr>
+          <tr><th>Devstral-Small-2-24B IQ4_XS</th><td>llama.cpp</td><td class="num"><span class="pill ok">2 / 2</span></td><td class="num">132 s</td><td class="num">0 / 12</td><td class="num">—</td></tr>
+          <tr><th>Qwen3.6-35B-A3B 3-bit</th><td>MLX</td><td class="num"><span class="pill mid">3 / 4</span></td><td class="num">177 s</td><td class="num">0 / 31</td><td class="num"><strong>20.2 GB · 84 %</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>gpt-oss wins on all three axes at once: more reliable, three times faster, and with 17
+      percentage points more memory headroom. The Qwen MoE is the slowest despite activating only 3B of
+      its 35B parameters — its failures are expensive, and its one bad run burned 8,211 reasoning tokens
+      going nowhere.</p>
+      <p>Devstral is credible on quality — it never failed and never touched the tests — but llama.cpp on
+      Apple Silicon costs roughly 2.4× the wall time of MLX, because it does not use the M5's neural
+      accelerators.</p>
+
+      <h3>Turning off reasoning does not help</h3>
+      <p>An obvious idea, since Devstral solves this task with <code>reasoning_tokens: 0</code>: disable
+      thinking on the Qwen MoE and skip the loop entirely. Measured on the same request:</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Mode</th><th class="num">Reasoning tok</th><th class="num">Completion tok</th><th class="num">Time</th><th>Tool call</th></tr></thead>
+          <tbody>
+            <tr><td>thinking on</td><td class="num">108</td><td class="num">169</td><td class="num">4.4 s</td><td><span class="pill ok">yes</span></td></tr>
+            <tr><td><code>/no_think</code></td><td class="num">2</td><td class="num">2,047 <em>(limit)</em></td><td class="num">64.8 s</td><td><span class="pill bad">no</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Without thinking the model stops calling tools altogether and rambles to the token limit. For
+      Qwen3.6 the reasoning is load-bearing for tool use — you cannot strip it and get a non-reasoning
+      model's behaviour. Devstral works without it because it was trained that way, not because thinking
+      is optional. (Note that <code>chat_template_kwargs: {"enable_thinking": false}</code> is silently
+      ignored by LM Studio; only the <code>/no_think</code> token in the message actually takes effect.)</p>
+    </div>
+
+    <div class="col">
+      <p>The patch reads like something a person would write: the week group inserted at the correct
+      grammatical position (before the <code>T</code> separator, where ISO-8601 puts it),
+      <code>int()</code> changed to <code>float()</code> <em>and</em> the accumulator initialised to
+      <code>0.0</code> — the second half being the part that is easy to miss — and four lines applying
+      the sign after summation. No invented features, no gratuitous restructuring.</p>
+      <p>Note the variance: run 5 finished in 4 tool calls and 556 reasoning tokens, run 4 needed 2,605.
+      A factor of 4.7 on an identical task. Single runs tell you very little here.</p>
+    </div>
+  </section>
+
+  <section id="quant">
+    <div class="col">
+      <h2><span class="num">Finding 2</span>One malformed tool call in 128</h2>
+      <p>The question that started this investigation was whether 3-bit quantisation was corrupting tool
+      arguments. Across the whole study — three models, three prompt sizes, two sampling regimes, plus
+      the repair task — <strong>128 tool calls produced exactly one schema failure</strong>: a
+      <code>write</code> with a completely empty arguments object. The agent recovered on the next step
+      and the run still went green.</p>
+      <p>The harness validated this itself rather than trusting the agent framework, declaring the JSON
+      schema and checking every incoming call against its own <code>required</code> list before
+      executing it.</p>
+      <p>One detail is suggestive but unproven: the single failure came on the real task, where
+      <code>write</code> arguments carry an entire 1,400-token source file, not the two short strings the
+      toy task needed. Large arguments may well be where this risk lives. One occurrence is not evidence,
+      and I am flagging it as a hypothesis rather than a finding.</p>
+    </div>
+
+    <div class="callout key">
+      <div class="label">The distinction that matters</div>
+      <p>"Model emits broken tool arguments" and "model does not emit tool calls at all" look identical
+      in an agent's error log and have nothing in common underneath. The first would point at the
+      quantisation. The second — the one that actually happened — points at instruction following under
+      context pressure. I spent hours on the wrong one.</p>
+    </div>
+  </section>
+
+  <section id="sampling">
+    <div class="col">
+      <h2><span class="num">Finding 3</span>Sampling parameters rescue a fragile model and are irrelevant to a robust one</h2>
+      <p>Qwen's documented recommendation for thinking mode is <code>temperature 0.6</code>,
+      <code>top_p 0.95</code>, <code>top_k 20</code>. I had been running <code>temperature 0.3</code> with
+      no truncation parameters at all. On the Qwen MoE the difference is not subtle:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Qwen3.6-35B-A3B, same prompt, same model, same minute</caption>
+        <thead>
+          <tr><th>Sampling</th><th class="num">Reasoning tokens</th><th class="num">Wall time</th><th>Finish reason</th><th>Result</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>temp 0.3, no top_k / top_p</td>
+            <td class="num">8,191</td><td class="num">143 s</td><td>length</td>
+            <td><span class="pill bad">nothing</span></td>
+          </tr>
+          <tr>
+            <td>temp 0.6, top_p 0.95, top_k 20</td>
+            <td class="num">105</td><td class="num">4 s</td><td>tool_calls</td>
+            <td><span class="pill ok">correct call</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>A 78× difference in reasoning tokens from four numbers. Low temperature without nucleus and
+      top-k truncation drives this model into a repetition loop. The fingerprint in LM Studio's server
+      log is unmistakable: repeated <em>token ID 0</em> (<code>!</code>) rejected as an invalid sample,
+      over and over.</p>
+
+      <div class="callout warn">
+        <div class="label">Sampling reduces this failure — it does not remove it</div>
+        <p>The correct parameters took the Qwen MoE from 0/6 to 3/6 on the synthetic task and 3/4 on the
+        real one. But the token-ID-0 loop still appeared <em>with correct sampling</em>, in one run of
+        four, burning 8,211 reasoning tokens. This is a property of the model that good sampling makes
+        rarer, not a bug that configuration fixes.</p>
+      </div>
+
+      <p><strong>Then I ran the same broken configuration against gpt-oss, and it did not care.</strong></p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Both models under the deliberately broken config (temp 0.3, no truncation), large prompt, 6 runs</caption>
+        <thead>
+          <tr><th>Model</th><th class="num">Verified</th><th class="num">Median time</th><th class="num">Tool calls</th><th class="num">Length stops</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>gpt-oss-20b</th><td class="num"><span class="pill ok">6 / 6</span></td><td class="num">14.4 s</td><td class="num">14</td><td class="num">0</td></tr>
+          <tr><th>Qwen3.6-35B-A3B</th><td class="num"><span class="pill bad">0 / 6</span></td><td class="num">—</td><td class="num">0</td><td class="num">every step</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>gpt-oss was in fact <em>faster</em> with the "broken" settings — 14.4 s median against 16.4 s —
+      because lower temperature made it more decisive and it needed fewer steps.</p>
+      <p>So the honest version of this finding is narrower than the one I first published: these
+      parameters are not a general fix for local agentic coding. They are a rescue for a model that is
+      fragile to them. If your model needs them, it is telling you something about itself.</p>
+    </div>
+  </section>
+
+  <section id="kv">
+    <div class="col">
+      <h2><span class="num">Finding 4</span>File size is the wrong number. Compute the KV cache first.</h2>
+      <p>I picked candidate models by weight size, and it led me badly astray. Devstral-Small-2-24B is
+      <em>smaller</em> on disk than the Qwen MoE — 14.39 GB against 15.20 GB — and is far less usable on
+      this machine, because its attention architecture is completely different.</p>
+      <p>Qwen3.5/3.6 interleave linear-attention layers with full-attention ones; gpt-oss alternates
+      sliding-window and full attention with a 128-token window. Only full-attention layers cost KV
+      cache. Devstral has <code>sliding_window: null</code> — all 40 layers are full attention, at 8 KV
+      heads and <code>head_dim</code> 128.</p>
+<pre><code>bytes/token = full_attention_layers
+            × num_key_value_heads
+            × head_dim
+            × 2   (K and V)
+            × 2   (bytes per fp16 element)</code></pre>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Computed from each model's config.json — before downloading anything</caption>
+        <thead>
+          <tr><th>Model</th><th class="num">Layers</th><th class="num">Full-attn</th><th class="num">KV heads</th><th class="num">head_dim</th><th class="num">KB/token</th><th class="num">KV at 32k</th><th class="num">Usable context here</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>Qwen3.6-35B-A3B</th><td class="num">40</td><td class="num">10</td><td class="num">2</td><td class="num">256</td><td class="num">20</td><td class="num">0.65 GB</td><td class="num">32,768</td></tr>
+          <tr><th>gpt-oss-20b</th><td class="num">24</td><td class="num">12</td><td class="num">8</td><td class="num">64</td><td class="num">24</td><td class="num">0.75 GB</td><td class="num">32,768</td></tr>
+          <tr><th>Devstral-Small-2-24B</th><td class="num">40</td><td class="num">40</td><td class="num">8</td><td class="num">128</td><td class="num"><strong>160</strong></td><td class="num"><strong>5.00 GB</strong></td><td class="num"><strong>4,864</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <div class="label">LM Studio silently capped the context</div>
+      <p>I requested 16,384 tokens. The model loaded successfully in 6.1 seconds with no warning of any
+      kind — and the <code>CONTEXT</code> column of <code>lms ps</code> read <strong>4,864</strong>.
+      Passing <code>--parallel 1</code> made no difference. The only symptom downstream was an
+      HTTP 400 with <em>"The number of tokens to keep from the initial prompt is greater than the context
+      length"</em> once a realistic prompt arrived. Check <code>lms ps</code> after every load; the
+      number you asked for is not necessarily the number you got.</p>
+    </div>
+
+    <div class="col">
+      <p>Devstral itself performed well within that ceiling — 6/6 on the small prompt, 11.4 s median, the
+      fastest of the three, 13 clean tool calls. It is not a bad model on this hardware. It just cannot
+      hold an agent's instructions and a conversation at the same time.</p>
+      <p>The number to select on is therefore <strong>weights + KV cache at the context you actually
+      need</strong>, and you can compute it from <code>config.json</code> before spending a single
+      gigabyte of bandwidth. I had this formula in my notes from the second hour and still chose
+      candidates by file size.</p>
+
+      <h3>And then the runtime decides whether any of it matters</h3>
+      <p>I concluded from the 4,864 ceiling that Devstral was unusable on 24 GB. That was wrong, and the
+      way it was wrong is instructive: I had measured a <em>tool</em> and attributed the result to the
+      <em>model</em>. Three routes to the same weights, three different outcomes:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Devstral-Small-2-24B, same machine, same day</caption>
+        <thead><tr><th>Route</th><th class="num">Usable context</th><th>Tool calling</th><th>Verdict</th></tr></thead>
+        <tbody>
+          <tr><th>LM Studio + MLX (MXFP4)</th><td class="num">4,864 — capped</td><td><span class="pill ok">works</span></td><td>context too small for an agent</td></tr>
+          <tr><th><code>mlx_lm.server</code> + MLX</th><td class="num">13,728 measured</td><td><span class="pill bad">broken</span></td><td>returns an empty message</td></tr>
+          <tr><th>LM Studio + GGUF (IQ4_XS)</th><td class="num">16,384 — as requested</td><td><span class="pill ok">works</span></td><td><span class="pill ok">usable</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Driving MLX directly, Devstral handled a 13,728-token prompt in 31.7 s at 16.43 GB peak — proof
+      that neither the model nor MLX has a 4,864-token problem. But <code>mlx_lm.server</code> 0.31.3
+      cannot surface this model's tool calls: it correctly reports <code>has_tool_calling = True</code>,
+      the model generates 34 tokens, and the response comes back containing nothing but
+      <code>{"role": "assistant"}</code> — no content, no <code>tool_calls</code>. Plain chat works
+      fine; passing <code>tools</code> empties the reply.</p>
+      <p>The GGUF build is the only route that does both. It costs speed — 132 s per task against 55 s
+      for gpt-oss on MLX — but it is the difference between a usable model and an unusable one.</p>
+      <p>One more llama.cpp trap: overflow the context and it <strong>hangs</strong> rather than
+      erroring. I sent a 24,000-token prompt to a 16,384-token context and got silence until LM Studio
+      logged <code>Channel Error</code> fifteen minutes later. MLX returns a clean HTTP 400 for the same
+      mistake. I misread those hangs as "GGUF is unbearably slow" before finding my own overfeeding.</p>
+    </div>
+  </section>
+
+  <section id="memory">
+    <div class="col">
+      <h2><span class="num">Finding 5</span>Wired memory is a step function, and pressure monitoring cannot see it</h2>
+      <p>MLX loads safetensors via <code>mmap</code>. At idle those pages are file-backed — active or
+      inactive, not wired. The moment inference starts the GPU wires them, and wired memory jumps to a
+      plateau in under two seconds. Sampling <code>memory_pressure</code> every two seconds through one
+      1,200-token generation on the 15.2 GB model:</p>
+    </div>
+
+    <figure>
+      <div class="chartcard">
+        <div class="charthead">Wired memory through one inference call</div>
+        <div class="chartsub">15.2 GB model · 32k context · 2-second samples · GB of 24 total</div>
+        <div class="canvasbox">
+          <canvas id="wiredChart" width="1600" height="620" role="img"
+            aria-label="Wired memory over 80 seconds. Baseline 2.24 GB, jumps to 19.26 GB within 2 seconds, stays flat between 19.15 and 19.29 GB for 16 seconds of generation, then drops back to about 2.3 GB and stays there."></canvas>
+          <div id="tip" role="status" aria-live="off"></div>
+        </div>
+      </div>
+      <figcaption>Flat across the whole generation — 19.25 to 19.29 GB, a drift of 30 MB. Not a leak.
+      But it sits at 80 % of physical memory for the duration of every request, and
+      <code>memory_pressure</code> reports the system as comfortable the entire time.</figcaption>
+      <details>
+        <summary>Show the measured values</summary>
+        <div class="tablewrap">
+          <table>
+            <caption>Wired memory, 2-second sampling interval</caption>
+            <thead><tr><th class="num">Sample</th><th class="num">Wired pages</th><th class="num">GB</th><th>Phase</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td class="num">147,219</td><td class="num">2.24</td><td>idle</td></tr>
+              <tr><td class="num">2</td><td class="num">1,262,377</td><td class="num">19.26</td><td>ramp complete</td></tr>
+              <tr><td class="num">3</td><td class="num">1,255,629</td><td class="num">19.15</td><td>generating</td></tr>
+              <tr><td class="num">5</td><td class="num">1,261,757</td><td class="num">19.25</td><td>generating</td></tr>
+              <tr><td class="num">9</td><td class="num">1,264,443</td><td class="num">19.29</td><td>generating (peak)</td></tr>
+              <tr><td class="num">10</td><td class="num">156,293</td><td class="num">2.38</td><td>released</td></tr>
+              <tr><td class="num">40</td><td class="num">148,571</td><td class="num">2.26</td><td>idle</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </figure>
+
+    <div class="col">
+      <p>The plateau runs roughly <strong>weights + 2–3 GB</strong> on top of whatever the OS already
+      holds. Measured across all three models and both prompt sizes:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Measured wired peak under load. Smaller context means smaller KV means a lower plateau.</caption>
+        <thead><tr><th>Model</th><th>Prompt</th><th class="num">Context</th><th class="num">Wired peak</th><th class="num">% of 24 GB</th></tr></thead>
+        <tbody>
+          <tr><th>gpt-oss-20b</th><td>small</td><td class="num">32,768</td><td class="num">14.79 GB</td><td class="num">62 %</td></tr>
+          <tr><th>gpt-oss-20b</th><td>large</td><td class="num">32,768</td><td class="num">16.11 GB</td><td class="num">67 %</td></tr>
+          <tr><th>Devstral-Small-2-24B</th><td>small</td><td class="num">4,864</td><td class="num">16.25 GB</td><td class="num">68 %</td></tr>
+          <tr><th>Qwen3.6-35B-A3B</th><td>small</td><td class="num">32,768</td><td class="num">18.80 GB</td><td class="num">78 %</td></tr>
+          <tr><th>Qwen3.6-35B-A3B</th><td>large</td><td class="num">32,768</td><td class="num">19.29 GB</td><td class="num">80 %</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="streaming">
+    <div class="col">
+      <h2><span class="num">Finding 6</span>You can trade the whole memory problem away — for latency</h2>
+      <p>Everything above fights for headroom inside 24 GB. <a href="https://github.com/drumih/turbo-fieldfare">TurboFieldfare</a>
+      sidesteps the fight entirely: a Swift and Metal runtime, no MLX and no llama.cpp, written for one
+      model — Gemma 4 26B-A4B. It keeps a 1.35 GB shared core resident and <strong>streams each token's
+      experts off the SSD</strong>. That only works because the model is a mixture of experts with 4B
+      active of 26B total.</p>
+      <p>The memory claim is not marketing. Measured on the same machine, same day:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Wired memory under an agentic workload. TurboFieldfare figures are the median across a
+        six-run series; the maximum is excluded because another model was resident during part of it.</caption>
+        <thead><tr><th>Model · runtime</th><th class="num">Parameters</th><th class="num">Wired</th><th class="num">% of 24 GB</th><th class="num">Process RSS</th></tr></thead>
+        <tbody>
+          <tr><th>Gemma 4 26B-A4B · TurboFieldfare</th><td class="num">26B</td><td class="num"><strong>5.65 GB</strong></td><td class="num"><strong>24 %</strong></td><td class="num">1.60 GB</td></tr>
+          <tr><th>gpt-oss-20b · MLX</th><td class="num">21B</td><td class="num">16.11 GB</td><td class="num">67 %</td><td class="num">11.27 GiB</td></tr>
+          <tr><th>Qwen3.6-35B-A3B · MLX</th><td class="num">35B</td><td class="num">20.17 GB</td><td class="num">84 %</td><td class="num">14.16 GiB</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>A 26-billion-parameter model at 24 % of physical memory. The entire band where the kernel bug in
+      Finding 7 lives — and where this machine's desktop started flickering — simply is not reachable
+      any more. Prompt-prefix reuse works too: 12,642 of 20,087 prompt tokens were served from cache
+      across the series, and the server reports it honestly in
+      <code>usage.prompt_tokens_details.cached_tokens</code>.</p>
+
+      <h3>And then it is too slow to use</h3>
+      <p>That is the verdict from actually driving it through OpenCode, not from a benchmark: it answers,
+      the analysis is sound, and the wait makes it impractical for interactive work. The project's own
+      README measures 31–35 tok/s on a 24 GB M5 Pro — respectable — but decode speed is not the whole
+      story when every step re-reads experts from storage.</p>
+      <p>The trade is explicit and it is the right one on the wrong machine. On an 8 GB MacBook Air,
+      where the alternative is "cannot run a 26B model at all", paying latency for feasibility is
+      obviously correct. On 24 GB, where a 12 GB model already fits with headroom to spare, you are
+      paying latency for memory you did not need.</p>
+
+      <div class="callout warn">
+        <div class="label">Eleven days old, and it shows</div>
+        <p>The repair task produced <strong>0/6</strong> here, but that number should not be read as a
+        capability measurement. Two things spoiled it: another model was resident for part of the series
+        (my error — I restored gpt-oss after a reboot and never unloaded it), and <em>every single run</em>
+        hit an HTTP 500 from the server, which I could not reproduce in isolation.</p>
+        <p>One observation does stand independent of both: across 18 tool calls the model called
+        <code>bash</code> every time and <code>write</code> <strong>never once</strong>. It ran the tests,
+        saw them fail, and never attempted an edit. Same shape as the Qwen MoE under a long prompt.</p>
+        <p>The installer is rough in the same way: no timeout on its HTTP range requests, so a dropped
+        connection leaves it waiting silently — mine sat for 53 minutes at 44 % with 0 % CPU and no error.
+        Its <code>--resume</code> is genuinely lossless, which saves the situation, but unattended
+        installation is not something to count on yet.</p>
+      </div>
+
+      <p>Worth watching rather than adopting. The first release was 20 July 2026, the OpenAI-compatible
+      server arrived on the 27th, and long-context prefill on the 29th — five releases in ten days.</p>
+    </div>
+  </section>
+
+  <section id="panic">
+    <div class="col">
+      <h2><span class="num">Finding 7</span>The kernel panic is an unresolved Apple bug, not an MLX one</h2>
+      <p>Mid-session, the machine went down hard:</p>
+<pre><code>panic(cpu 12 caller 0xfffffe0050784280):
+"pending memory object unexpectedly found in non pending hash"
+@IOGPUGroupMemory.cpp:528
+
+Kernel Extensions in backtrace:
+  com.apple.iokit.IOGPUFamily(130.13)
+  com.apple.AGXG17X(351.2)
+
+Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
+      <p>A known defect class in Apple's IOGPU kernel extension, filed in several places with
+      near-identical signatures:</p>
+      <ul>
+        <li><a href="https://github.com/ml-explore/mlx-lm/issues/883">mlx-lm #883</a> — Qwen3-Coder-30B-A3B
+        in an agentic session, KV cache growing unbounded to ~58k tokens, 80.14 GB wired of 96 GB, panic at
+        <code>IOGPUMemory.cpp:550</code>. The reporter's memory-pressure monitor read <em>false</em> the
+        whole time. Open.</li>
+        <li><a href="https://github.com/ml-explore/mlx/issues/3186">mlx #3186</a> — M4 Max 36 GB,
+        reproducible at ~173k-token prefill. Escalated to Apple as FB22091885. Open.</li>
+        <li><a href="https://github.com/ml-explore/mlx/issues/3346">mlx #3346</a> — M3 Ultra 96 GB, names
+        both bugs as Apple IOGPU kext defects including a race in
+        <code>IOGPUGroupMemory.cpp:219</code> — same file as my panic, different line. Reporter's
+        conclusion: "the only mitigation is to stop using the GPU entirely."</li>
+      </ul>
+
+      <div class="callout warn">
+        <div class="label">Why this is worse than it sounds</div>
+        <p>Wired memory bypasses macOS memory-pressure detection, so nothing warns you before the kernel
+        falls over. A 96 GB machine panicked at 83 % wired. A 15 GB model on a 24 GB machine sits at 80 %
+        during <em>every</em> inference call. The only instrument that sees it is
+        <code>memory_pressure | grep "wired down"</code>.</p>
+      </div>
+
+      <div class="callout key">
+        <div class="label">There is one visible warning sign, and it is not in any tool</div>
+        <p>Late in the session the desktop began to <strong>flicker</strong> during a Qwen MoE run. Wired
+        was at 20.17 GB — 84 % of physical, the highest reading of the day and past the 83 % at which
+        mlx-lm #883 reports its panic. WindowServer needs GPU memory too, and when it cannot get it, the
+        UI stutters visibly.</p>
+        <p>That is the only early warning I found in a full day of measuring. Memory pressure still read
+        normal. If your desktop starts flickering while a local model is generating: save your work and
+        unload the model. You are in the band where the kernel bug lives.</p>
+      </div>
+
+      <p>macOS 26.6 ships GPU driver fixes — <a href="https://support.apple.com/en-us/128067">CVE-2026-64691</a>
+      (unexpected system termination, buffer overflow, improved size validation) and CVE-2026-43723
+      (memory corruption in a system process). Neither names the <code>IOGPUGroupMemory</code> race. I
+      have not panicked since updating, but a handful of hours proves nothing.</p>
+
+      <h3>What actually fed it</h3>
+      <p>Not model size, and not a large prefill. The agent log showed <code>step=138</code> through
+      <code>step=145</code>, four seconds apart and still climbing — an <strong>endless loop of 145+
+      steps</strong>, each one growing the KV cache. That loop existed because of the sampling
+      misconfiguration in Finding 2. The kernel bug is real and unfixed; what pushed the machine into it
+      was a bad config.</p>
+
+      <div class="callout warn">
+        <div class="label">Do not do what I did</div>
+        <p>I had raised <code>iogpu.wired_limit_mb</code> to 20480 for more GPU headroom and was about to
+        install a LaunchDaemon to persist it. Don't. mlx-lm #883 recommends moving the wired limit
+        <em>down</em> — from the ~75 % default toward 50–60 % — not up. Raising it lowers the threshold at
+        which the kernel bug becomes reachable. I retracted that and left the sysctl at <code>0</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="worse">
+    <div class="col">
+      <h2><span class="num">Finding 8</span>Three fixes that made things measurably worse</h2>
+      <p>All three seemed obviously right. They are here because I measured them.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Interventions on the Qwen MoE, same task</caption>
+        <thead><tr><th>Change</th><th>Intent</th><th class="num">Success</th><th>What happened</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>tool_choice: "required"</code></td><td>force a tool call</td><td class="num">0 / 3</td>
+            <td>8,191 tokens with <em>zero</em> reasoning tokens and empty content — constrained decoding the model cannot satisfy</td>
+          </tr>
+          <tr>
+            <td><code>max_tokens: 2048</code></td><td>cap runaway reasoning</td><td class="num">0 / 2</td>
+            <td>every step hit the limit; legitimate completions reach 2,361 tokens</td>
+          </tr>
+          <tr>
+            <td>nudge on missing tool call</td><td>prompt it back on track</td><td class="num">0 / 1</td>
+            <td>3 nudges, 32,764 tokens, 489 s, still no tool call</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>The nudging result is the useful one. I assumed the model was choosing prose and could be talked
+      into acting. Nudging does not work — but my conclusion that the state is always terminal was too
+      strong. On the real repair task, one run entered the degenerate loop, kept going, and came out the
+      other side with all 22 tests green after 251 seconds and 12 steps. Another run in the same series
+      went in and never returned. <strong>Recovery is possible but not reliable; a fresh session is still
+      the better bet than another turn in a poisoned context.</strong></p>
+      <p>The <code>max_tokens</code> one is my own misreading. I justified 2048 by pointing at measured
+      reasoning-token counts of 70–210 — but reasoning tokens are a subset of completion tokens, and full
+      completions ran to 2,361. The data was on my screen and I read the wrong column.</p>
+    </div>
+  </section>
+
+  <section id="gotchas">
+    <div class="col">
+      <h2><span class="num">Finding 9</span>Tooling behaviour that will cost you an hour each</h2>
+
+      <h3>LM Studio</h3>
+      <ul>
+        <li><code>lms get</code> <strong>returns exit code 0 when the download fails.</strong> Twice —
+        once because it silently lowercased a HuggingFace repo ID. Never trust the return value; check
+        file sizes.</li>
+        <li>Model keys match by prefix. <code>qwen3.6-35b-a3b</code> is a prefix of
+        <code>qwen3.6-35b-a3b-ud-mlx</code>, and with <code>-y</code> it warns "2 models match, loading
+        the first one" and picks whichever. Renaming the directory with a leading dot does not hide it —
+        LM Studio scans dot-directories. Move it out of the models tree and delete
+        <code>~/.lmstudio/.internal/model-index-cache.json</code>.</li>
+        <li><code>modelLoadingGuardrails</code> naming is <strong>inverted</strong>:
+        <code>mode: "high"</code> is the permissive default, <code>mode: "low"</code> is strict. I set it
+        to "low" believing I was relaxing it, and blocked a model that had loaded fine minutes before.</li>
+        <li>The guardrail rejects on weights alone. A 16.08 GB model failed identically at 16,384, 8,192
+        and 4,096 context with 20 GB free. The "Load Anyway" override exists only in the GUI — the CLI
+        does not expose it even with <code>alwaysAllowLoadAnyway: true</code>.</li>
+        <li>Context can be silently reduced at load time (Finding 4). Always verify with
+        <code>lms ps</code>.</li>
+        <li>Server logs at <code>~/.lmstudio/server-logs/</code> are where the real diagnosis lives —
+        reasoning durations, and Zod warnings for degenerate token samples the client never sees.</li>
+      </ul>
+
+      <h3>OpenCode</h3>
+      <ul>
+        <li><code>permission</code> defaults to <code>ask</code> for <code>bash</code> and
+        <code>edit</code>. In non-interactive <code>opencode run</code> this hangs forever in the
+        foreground and <strong>exits immediately with code 0 and an empty log</strong> when stdin is not a
+        TTY. Two contradictory-looking symptoms, one cause. Scope the grant to a project-level
+        <code>opencode.json</code>, not your global config.</li>
+        <li><code>provider.&lt;p&gt;.models.&lt;id&gt;.temperature</code> is a <strong>boolean capability
+        flag</strong>, not a value. Putting <code>0.6</code> there does nothing. Sampling values go in
+        <code>models.&lt;id&gt;.options</code> or <code>agent.&lt;name&gt;.temperature</code> /
+        <code>top_p</code>.</li>
+      </ul>
+
+      <h3>OpenCode: interactive works, <code>run</code> did not</h3>
+      <p>Every measurement in this document came from a purpose-built harness, because the agent itself
+      kept getting in the way. The final end-to-end check made that concrete: <code>opencode run</code>
+      in non-interactive mode hung in six of seven attempts — 90 to 600 seconds each, killed by watchdog,
+      no output. The process sat at 0.0 % CPU immediately after <code>message=init</code>, before session
+      creation and before any request reached the model server. It was not prompt-dependent: the same
+      one-line prompt completed in 6 seconds once and hung on the next three tries. <code>--pure</code>
+      did not reliably help. I did not find the cause.</p>
+      <p>The interactive TUI — plain <code>opencode</code>, no subcommand — worked on the first try and
+      built a three-file todo app (HTML, CSS, JS with <code>localStorage</code> persistence) with the
+      same model and config. So if the batch runner stalls on you, that is not your model or your
+      provider config. Use the TUI.</p>
+
+      <h3>HuggingFace CLI and macOS</h3>
+      <ul>
+        <li><strong>Never <code>SIGSTOP</code> an <code>hf download</code>.</strong> Xet CDN URLs are
+        presigned; suspending the process lets them expire and resume returns 403. Kill and restart.</li>
+        <li><code>hf download</code> did not resume my <code>.incomplete</code> shards — it discarded
+        1.5 GB and restarted from zero.</li>
+        <li>Unsloth "UD" (dynamic) quants are much larger than the bit-width implies, keeping some tensors
+        at higher precision. <code>Qwen3.6-35B-A3B-UD-MLX-3bit</code> is 17.4 GB against 15.2 GB for a
+        standard 3-bit — the difference between loading and not loading here. The 27B UD-3bit is
+        24.05 GB.</li>
+        <li>macOS has no <code>timeout(1)</code>. And <code>sudo softwareupdate -i -a --restart</code>
+        downloaded 26.6 to 100 %, exited 0, and never installed it. The GUI updater worked.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="sizing">
+    <div class="col">
+      <h2><span class="num">Reference</span>Sizing candidates for 24 GB</h2>
+      <p>Measured rows are marked. The rest are computed from <code>config.json</code> plus the
+      weights-plus-2-to-3-GB rule, which held where it could be checked: gpt-oss was estimated at
+      15.8 GB and measured at 16.11 GB.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>MLX quantisations, actual safetensors sizes from the HuggingFace API</caption>
+        <thead><tr><th>Model</th><th class="num">On disk</th><th class="num">Wired peak</th><th class="num">% of 24 GB</th><th>Verdict</th></tr></thead>
+        <tbody>
+          <tr><th>gpt-oss-20b MXFP4-Q8</th><td class="num">12.08 GB</td><td class="num">16.11 GB <em>meas.</em></td><td class="num">67 %</td><td><span class="pill ok">recommended</span></td></tr>
+          <tr><th>Devstral-Small-2507 4-bit</th><td class="num">13.26 GB</td><td class="num">~17.5 GB</td><td class="num">73 %</td><td><span class="pill mid">check its KV first</span></td></tr>
+          <tr><th>Devstral-Small-2-24B MXFP4</th><td class="num">14.39 GB</td><td class="num">16.25 GB <em>meas.</em></td><td class="num">68 %</td><td><span class="pill bad">4,864 ctx ceiling</span></td></tr>
+          <tr><th>Devstral-Small-2-24B 4-bit</th><td class="num">15.10 GB</td><td class="num">—</td><td class="num">—</td><td><span class="pill bad">worse ceiling</span></td></tr>
+          <tr><th>Qwen3.6-35B-A3B 3-bit</th><td class="num">15.20 GB</td><td class="num">19.29 GB <em>meas.</em></td><td class="num">80 %</td><td><span class="pill bad">3/6 under load</span></td></tr>
+          <tr><th>Qwen3.6-27B 4-bit</th><td class="num">16.08 GB</td><td class="num">~20 GB</td><td class="num">83 %</td><td><span class="pill bad">guardrail blocks</span></td></tr>
+          <tr><th>Qwen3.6-35B-A3B UD-3bit</th><td class="num">17.39 GB</td><td class="num">—</td><td class="num">—</td><td><span class="pill bad">will not load</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Loading takes about six seconds, so keeping two models and switching by task is cheap — a 12 GB
+      model for real work, a 4B/8B at 4-bit (2–5 GB) for quick things that should answer instantly.</p>
+      <p>The honest framing: 24 GB runs the 20B class well — six for six under a realistic agent prompt,
+      about sixteen seconds per completed task. If you want 30B+ for agentic work, memory is the binding
+      constraint, and it is soldered to the board.</p>
+      <p>Which points at the setup worth considering if you have a second machine: run the large model as
+      a server on the box with the memory, keep the agent on the laptop, and change one line — the
+      provider's <code>baseURL</code>. LAN latency is negligible next to generation time, and the whole
+      memory question disappears.</p>
+    </div>
+  </section>
+
+  <section id="wrong">
+    <div class="col">
+      <h2><span class="num">Corrections</span>Everything I concluded confidently and had to take back</h2>
+      <p>Listed because the pattern is the transferable lesson, not the individual mistakes: a real
+      symptom, a plausible cause, and no control experiment.</p>
+    </div>
+
+    <div class="log">
+      <div class="entry">
+        <div class="stamp">09:58</div>
+        <div class="col">
+          <h4>"Wired memory is running away"</h4>
+          <p>Saw wired climb 17 → 19 GB in 20 seconds and killed the test. It was the ramp to a flat
+          plateau; two-second sampling later showed 30 MB of drift across a whole generation. I aborted a
+          valid measurement for nothing.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">10:28</div>
+        <div class="col">
+          <h4>"The 3-bit quantisation is defective"</h4>
+          <p>I had real evidence: the server rejecting repeated token ID 0, and a log line reading
+          <code>Done reasoning. Reasoned for 807.33 seconds.</code> which I read as one enormous request.
+          Degenerate token emission does indicate a broken quant — it also indicates bad sampling, which
+          is what it was. One malformed tool call in 128.</p>
+          <p><strong>The 807 seconds were not a request.</strong> Hours later the same counter read
+          36,646 seconds — 10.2 hours, exactly the server's uptime. It is cumulative, not per-request,
+          and I had quoted it as evidence in the first published version of this document.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">10:37</div>
+        <div class="col">
+          <h4>"System prompt size is irrelevant"</h4>
+          <p>Built a switchable-prompt harness to prove prompt size was tipping the model over, saw the
+          one-sentence prompt fail identically, and concluded size didn't matter. It didn't — <em>under
+          the broken sampling config</em>. With sampling fixed, prompt size turned out to be the single
+          strongest predictor in the entire study.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">10:53</div>
+        <div class="col">
+          <h4>"Cap max_tokens at 2048, successful steps only need 210"</h4>
+          <p>Read my own results table wrong: 70–210 were <em>reasoning</em> tokens; completions reached
+          2,361.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">11:15</div>
+        <div class="col">
+          <h4>"It was the sampling parameters" — published, then refuted</h4>
+          <p>This was the headline of the first version of this document. Then I ran the broken config
+          against gpt-oss for a control and got 6/6, faster than with the "correct" values. The sampling
+          fix is real but scoped to a fragile model. I had generalised from a single subject.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">11:41</div>
+        <div class="col">
+          <h4>"Devstral scored 0/6"</h4>
+          <p>Twice wrong. The first 0/6 was HTTP 400 in 0.0 seconds — the prompt exceeded the context
+          ceiling and the model never saw a token. The second was my verification logic: Devstral wrote a
+          correct <code>greet()</code> plus a module-level <code>print</code>, so my checker saw the output
+          twice and called it a failure. Devstral is 6/6.</p>
+        </div>
+      </div>
+
+      <div class="entry">
+        <div class="stamp">19:00</div>
+        <div class="col">
+          <h4>"Devstral 2 is not viable on 24 GB"</h4>
+          <p>Published, and wrong. I had measured LM Studio's MLX loader — which caps this model at 4,864
+          tokens for reasons I never identified — and written it up as a property of the model. Driving
+          MLX directly, the same weights handled 13,728 tokens. Loaded as GGUF, LM Studio gave the full
+          16,384 requested. The reader who pushed back on this was right and I was not.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">19:15</div>
+        <div class="col">
+          <h4>"GGUF is unbearably slow"</h4>
+          <p>Based on three consecutive ten-minute timeouts. They were caused by my own probe sending a
+          24,000-token prompt into a 16,384-token context — llama.cpp hangs on overflow instead of
+          erroring. Measured properly: 21 tok/s and 132 s per repair task.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">20:06</div>
+        <div class="col">
+          <h4>"807 seconds of reasoning on one request"</h4>
+          <p>Quoted as evidence of a broken quant in the first published version. The same counter later
+          read 36,646 seconds — the server's uptime. It is cumulative, and it never meant what I said it
+          meant.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">20:10</div>
+        <div class="col">
+          <h4>"The degenerate state is always terminal"</h4>
+          <p>One run on the real task entered the token-ID-0 loop and worked its way out, finishing green
+          after 251 seconds. Recovery is possible — just not reliable.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <h3>The pattern</h3>
+      <p>Three of these were my own tooling misread as model behaviour: backgrounding
+      <code>opencode run</code> (EOF on stdin, instant exit 0), the permission prompt (silent hang), and
+      the verification logic (correct code scored as failure). Each looked exactly like the model failing.</p>
+      <p>With a harness you wrote yourself, the first hypothesis for a surprising result should be the
+      harness — not the model. I reached for the model every time, because that was the interesting
+      answer.</p>
+      <p>The other three share a different shape: I measured one model, found a real effect, and stated it
+      as a general principle. The control experiment that would have caught all three — run the same
+      broken configuration against a second model — took eleven minutes when I finally did it.</p>
+    </div>
+  </section>
+
+  <section id="open">
+    <div class="col">
+      <h2><span class="num">Still open</span>What I do not know</h2>
+      <ul>
+        <li>Whether macOS 26.6 fixes the <code>IOGPUGroupMemory</code> race. The GPU driver CVEs it
+        patches are plausible candidates but do not name it.</li>
+        <li>Why the Qwen MoE degrades specifically under a long system prompt while gpt-oss does not.
+        The <em>what</em> is measured; the mechanism is not.</li>
+        <li>Whether the sliding-window models hold up at genuinely long contexts. Everything here ran at
+        32k or below, and mlx #3186 reproduces its panic at ~173k prefill.</li>
+        <li>What Devstral-Small-2-24B would do with a real agent prompt on a machine that can hold one.
+        Its 6/6 within a 4,864-token ceiling says nothing about the 32k case.</li>
+        <li>Whether gpt-oss has better sampling values than the Qwen ones I borrowed. Its
+        <code>generation_config.json</code> specifies only <code>do_sample: true</code>.</li>
+        <li>Why <code>opencode run</code> hangs before session creation while the interactive TUI does
+        not. Six failures, no cause found.</li>
+        <li>How this scales past a single file. The repair task is real but small — one module, three
+        bugs, a test suite that runs in a millisecond. Nothing here says anything about a refactor
+        spanning twenty files, or a codebase that does not fit in 32k of context.</li>
+        <li>Whether large tool-call arguments really drive the schema-failure risk. One occurrence in
+        128 is a hypothesis, not a result.</li>
+      </ul>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <footer>
+    <p>All numbers measured on one machine on one day: Apple M5 Pro, 24 GB, macOS 26.6 build 25G72,
+    LM Studio 0.4.20 with the MLX runtime. Models: <code>mlx-community/gpt-oss-20b-MXFP4-Q8</code>,
+    <code>mlx-community/mistralai_Devstral-Small-2-24B-Instruct-2512-MLX-MXFP4</code>,
+    <code>NexVeridian/Qwen3.6-35B-A3B-3bit</code>.</p>
+    <p>The harness was a ~180-line Python loop talking directly to the OpenAI-compatible endpoint,
+    validating tool arguments against the declared schema itself. It exists because the coding agent had
+    to be ruled out as a variable — which, twice, it turned out to be. The repair task used the same loop
+    with the test suite as its success criterion, and verified afterwards that the tests themselves were
+    byte-identical to the originals.</p>
+    <p>Six runs per configuration. Enough to separate 3/6 from 6/6; not enough to distinguish 5/6 from
+    6/6. Treat single-run differences as noise. One gpt-oss run took 355 seconds for 375 tokens and is
+    excluded from timing means as a system-level outlier; it is included in the success counts, where it
+    passed.</p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  // Measured wired-memory samples, 2s interval, GB. Sample 1 is idle baseline.
+  var data = [2.24,19.26,19.15,19.17,19.25,19.25,19.28,19.28,19.29,2.38,
+              2.38,2.38,2.38,2.39,2.27,2.38,2.38,2.27,2.38,2.38,
+              2.37,2.37,2.37,2.37,2.37,2.37,2.37,2.37,2.37,2.26,
+              2.26,2.37,2.37,2.37,2.26,2.37,2.26,2.37,2.37,2.26];
+
+  var cv = document.getElementById('wiredChart');
+  var tip = document.getElementById('tip');
+  if (!cv) return;
+  var ctx = cv.getContext('2d');
+
+  var TOTAL = 24;
+  var THRESH = 19.2;
+  var pad = { l: 78, r: 26, t: 22, b: 46 };
+
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  var hoverIdx = -1;
+
+  function xAt(i, w) { return pad.l + (w - pad.l - pad.r) * (i / (data.length - 1)); }
+  function yAt(v, h) { return pad.t + (h - pad.t - pad.b) * (1 - v / TOTAL); }
+
+  function draw() {
+    var cssW = cv.clientWidth || 800;
+    var cssH = Math.round(cssW * 0.3875);
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(cssW * dpr);
+    cv.height = Math.round(cssH * dpr);
+    cv.style.height = cssH + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    var w = cssW, h = cssH;
+    var ink = css('--ink'), muted = css('--muted');
+    var hair = css('--hairline'), series = css('--accent');
+    var surface = css('--raised'), warn = css('--warn');
+
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.font = '500 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (var g = 0; g <= 24; g += 6) {
+      var y = yAt(g, h);
+      ctx.strokeStyle = hair;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.l, Math.round(y) + 0.5);
+      ctx.lineTo(w - pad.r, Math.round(y) + 0.5);
+      ctx.stroke();
+      ctx.fillStyle = muted;
+      ctx.fillText(g + (g === 24 ? ' GB' : ''), pad.l - 12, y);
+    }
+
+    var ty = yAt(THRESH, h);
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = warn;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, Math.round(ty) + 0.5);
+    ctx.lineTo(w - pad.r, Math.round(ty) + 0.5);
+    ctx.stroke();
+    ctx.restore();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = warn;
+    ctx.font = '600 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillText('80 % — panic zone in mlx-lm #883', pad.l + 8, ty - 11);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = muted;
+    ctx.font = '500 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+    for (var s = 0; s < data.length; s += 5) {
+      ctx.fillText((s * 2) + 's', xAt(s, w), h - pad.b + 12);
+    }
+
+    var grad = ctx.createLinearGradient(0, pad.t, 0, h - pad.b);
+    grad.addColorStop(0, series + '2e');
+    grad.addColorStop(1, series + '05');
+    ctx.beginPath();
+    ctx.moveTo(xAt(0, w), yAt(data[0], h));
+    for (var i = 1; i < data.length; i++) ctx.lineTo(xAt(i, w), yAt(data[i], h));
+    ctx.lineTo(xAt(data.length - 1, w), h - pad.b);
+    ctx.lineTo(xAt(0, w), h - pad.b);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(xAt(0, w), yAt(data[0], h));
+    for (var j = 1; j < data.length; j++) ctx.lineTo(xAt(j, w), yAt(data[j], h));
+    ctx.strokeStyle = series;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    var pk = data.indexOf(Math.max.apply(null, data));
+    var px = xAt(pk, w), py = yAt(data[pk], h);
+    ctx.beginPath();
+    ctx.arc(px, py, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = series;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = surface;
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = ink;
+    ctx.font = '600 12px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillText('peak 19.29', px + 11, py - 4);
+
+    if (hoverIdx >= 0) {
+      var hx = xAt(hoverIdx, w), hy = yAt(data[hoverIdx], h);
+      ctx.save();
+      ctx.strokeStyle = muted;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(Math.round(hx) + 0.5, pad.t);
+      ctx.lineTo(Math.round(hx) + 0.5, h - pad.b);
+      ctx.stroke();
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = series;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = surface;
+      ctx.stroke();
+    }
+  }
+
+  function locate(ev) {
+    var r = cv.getBoundingClientRect();
+    var x = ev.clientX - r.left;
+    var w = cv.clientWidth;
+    var frac = (x - pad.l) / (w - pad.l - pad.r);
+    var i = Math.round(frac * (data.length - 1));
+    if (i < 0 || i >= data.length) return -1;
+    return i;
+  }
+
+  cv.addEventListener('mousemove', function (ev) {
+    var i = locate(ev);
+    if (i !== hoverIdx) { hoverIdx = i; draw(); }
+    if (i < 0) { tip.style.opacity = '0'; return; }
+    var w = cv.clientWidth, h = cv.clientHeight;
+    tip.textContent = (i * 2) + 's · ' + data[i].toFixed(2) + ' GB wired';
+    tip.style.opacity = '1';
+    var tx = Math.min(Math.max(xAt(i, w) - tip.offsetWidth / 2, 4), w - tip.offsetWidth - 4);
+    tip.style.left = tx + 'px';
+    tip.style.top = Math.max(yAt(data[i], h) - tip.offsetHeight - 12, 2) + 'px';
+  });
+
+  cv.addEventListener('mouseleave', function () {
+    hoverIdx = -1; tip.style.opacity = '0'; draw();
+  });
+
+  var raf;
+  window.addEventListener('resize', function () {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(draw);
+  });
+
+  new MutationObserver(draw).observe(document.documentElement,
+    { attributes: true, attributeFilter: ['data-theme'] });
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq.addEventListener) mq.addEventListener('change', draw);
+  }
+
+  draw();
+})();
+</script>

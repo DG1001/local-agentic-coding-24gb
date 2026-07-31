@@ -1,0 +1,109 @@
+{
+  "_comment": "Rohzahlen der Messreihe vom 30./31. Juli 2026. Eine Maschine, ein Tag. Sechs Laeufe pro Konfiguration, ausser wo anders vermerkt.",
+  "machine": {
+    "model": "Apple M5 Pro",
+    "cores": 15,
+    "unified_memory_bytes": 25769803776,
+    "os": "macOS 26.6",
+    "build": "25G72"
+  },
+  "stack": {
+    "lm_studio": "0.4.20",
+    "opencode": "1.18.9",
+    "mlx_lm": "0.31.3",
+    "turbofieldfare": "0.3"
+  },
+  "sampling_default": {
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "repetition_penalty": 1.05,
+    "note": "Qwens dokumentierte Empfehlung fuer Thinking-Modus. Fuer die 'broken'-Reihe: temperature 0.3 ohne top_p/top_k."
+  },
+
+  "synthetic_task": {
+    "_comment": "greet.py schreiben, ausfuehren, verifizieren. small = 245 prompt tokens, large = ~5600.",
+    "gpt-oss-20b-MXFP4": {
+      "runtime": "MLX", "weights_gb": 12.08,
+      "small_prompt": {"passed": 6, "of": 6, "median_s": 9.7, "tool_calls": 16, "schema_errors": 0, "wired_peak_gb": 14.79},
+      "large_prompt": {"passed": 6, "of": 6, "median_s": 16.4, "tool_calls": 21, "schema_errors": 0, "wired_peak_gb": 16.11},
+      "large_prompt_broken_sampling": {"passed": 6, "of": 6, "median_s": 14.4, "tool_calls": 14, "schema_errors": 0}
+    },
+    "Devstral-Small-2-24B-MXFP4": {
+      "runtime": "MLX", "weights_gb": 14.39,
+      "small_prompt": {"passed": 6, "of": 6, "median_s": 11.4, "tool_calls": 13, "schema_errors": 0, "wired_peak_gb": 16.25},
+      "large_prompt": {"passed": null, "of": 6, "note": "Prompt uebersteigt den auf 4864 gedeckelten Kontext, HTTP 400 vor dem ersten Token"}
+    },
+    "Qwen3.6-35B-A3B-3bit": {
+      "runtime": "MLX", "weights_gb": 15.20,
+      "small_prompt": {"passed": 6, "of": 6, "median_s": 9.3, "tool_calls": 16, "schema_errors": 0, "wired_peak_gb": 18.80},
+      "large_prompt": {"passed": 3, "of": 6, "median_s": 28.7, "tool_calls": 7, "schema_errors": 0, "wired_peak_gb": 19.29,
+                       "runs_without_tool_call": 3, "runs_hitting_token_limit": 2},
+      "large_prompt_broken_sampling": {"passed": 0, "of": 6, "note": "token-ID-0-Schleife, 8191 Reasoning-Tokens pro Lauf"}
+    }
+  },
+
+  "repair_task": {
+    "_comment": "ISO-8601-Parser, 22 Tests, 7 rot, drei unabhaengige Fehler. Verifikation ueber die Testsuite; zusaetzlich geprueft ob test_duration.py byte-identisch blieb.",
+    "baseline": "15/22 passing",
+    "gpt-oss-20b-MXFP4": {
+      "runtime": "MLX", "passed": 6, "of": 6, "median_s": 55.0, "range_s": [27.8, 63.7],
+      "tool_calls": 41, "schema_errors": 1, "tests_untouched": "6/6", "wired_peak_gb": 16.11,
+      "runs": [
+        {"steps": 10, "bash": 7, "write": 2, "schema_errors": 1, "reasoning": 1548, "wall_s": 63.7},
+        {"steps": 9, "bash": 7, "write": 1, "schema_errors": 0, "reasoning": 1967, "wall_s": 53.9},
+        {"steps": 7, "bash": 5, "write": 1, "schema_errors": 0, "reasoning": 719, "wall_s": 37.1},
+        {"steps": 8, "bash": 6, "write": 1, "schema_errors": 0, "reasoning": 2605, "wall_s": 63.0},
+        {"steps": 5, "bash": 3, "write": 1, "schema_errors": 0, "reasoning": 556, "wall_s": 27.8},
+        {"steps": 8, "bash": 6, "write": 1, "schema_errors": 0, "reasoning": 2131, "wall_s": 56.0}
+      ]
+    },
+    "Devstral-Small-2-24B-IQ4_XS": {
+      "runtime": "llama.cpp (GGUF)", "passed": 2, "of": 2, "median_s": 132.0,
+      "tool_calls": 12, "schema_errors": 0, "tests_untouched": "2/2",
+      "note": "Serie nach zwei Laeufen abgebrochen. Nur der GGUF-Weg erlaubte 16k Kontext."
+    },
+    "Qwen3.6-35B-A3B-3bit": {
+      "runtime": "MLX", "passed": 3, "of": 4, "median_s": 176.8, "range_s": [51.8, 251.0],
+      "tool_calls": 31, "schema_errors": 0, "tests_untouched": "4/4", "wired_peak_gb": 20.17,
+      "runs": [
+        {"steps": 7, "reasoning": 893, "wall_s": 51.8, "green": true},
+        {"steps": 12, "reasoning": 1134, "wall_s": 251.0, "green": true, "note": "in die degenerierte Schleife geraten und wieder herausgefunden"},
+        {"steps": 2, "reasoning": 8211, "wall_s": 109.1, "green": false, "note": "token-ID-0-Schleife trotz korrektem Sampling"},
+        {"steps": 14, "reasoning": 864, "wall_s": 176.8, "green": true}
+      ]
+    },
+    "gemma-4-26b-a4b-TurboFieldfare": {
+      "runtime": "TurboFieldfare 0.3 (SSD-Streaming)", "passed": 0, "of": 6,
+      "tool_calls": 18, "schema_errors": 0, "tests_untouched": "6/6",
+      "wired_median_gb": 5.65, "process_rss_gb": 1.60,
+      "cached_tokens": 12642, "prompt_tokens": 20087,
+      "invalid": true,
+      "note": "NICHT als Faehigkeitsmessung verwertbar: waehrend eines Teils der Serie war zusaetzlich gpt-oss geladen, und jeder Lauf lief in einen HTTP 500. Unabhaengig davon gilt: das Modell rief 18-mal bash und kein einziges Mal write auf."
+    }
+  },
+
+  "kv_cache": {
+    "_comment": "bytes/token = full_attention_layers * num_key_value_heads * head_dim * 2 (K+V) * 2 (fp16)",
+    "Qwen3.6-35B-A3B": {"layers": 40, "full_attention": 10, "kv_heads": 2, "head_dim": 256, "kb_per_token": 20},
+    "gpt-oss-20b": {"layers": 24, "full_attention": 12, "kv_heads": 8, "head_dim": 64, "kb_per_token": 24, "sliding_window": 128},
+    "Devstral-Small-2-24B": {"layers": 40, "full_attention": 40, "kv_heads": 8, "head_dim": 128, "kb_per_token": 160, "sliding_window": null},
+    "gemma-4-26b-a4b": {"layers": 30, "full_attention": 5, "kv_heads": 8, "head_dim": 256, "kb_per_token": 40, "sliding_window": 1024}
+  },
+
+  "wired_memory_trace": {
+    "_comment": "memory_pressure alle 2s waehrend einer 1200-Token-Generierung, Qwen3.6-35B-A3B bei 32k. Werte in GB.",
+    "samples_gb": [2.24, 19.26, 19.15, 19.17, 19.25, 19.25, 19.28, 19.28, 19.29, 2.38,
+                   2.38, 2.38, 2.38, 2.39, 2.27, 2.38, 2.38, 2.27, 2.38, 2.38,
+                   2.37, 2.37, 2.37, 2.37, 2.37, 2.37, 2.37, 2.37, 2.37, 2.26,
+                   2.26, 2.37, 2.37, 2.37, 2.26, 2.37, 2.26, 2.37, 2.37, 2.26]
+  },
+
+  "context_ceilings": {
+    "_comment": "Was LM Studio tatsaechlich geladen hat, gegen das Angeforderte.",
+    "Devstral-MLX-MXFP4": {"requested": [16384, 12288, 8192, 19456], "granted": 4864, "note": "still gekuerzt, keine Warnung"},
+    "Devstral-GGUF-IQ4_XS": {"requested": 16384, "granted": 16384},
+    "Qwen3.6-27B-MLX-4bit": {"requested": [16384, 8192, 4096], "granted": null, "note": "Laden komplett verweigert (Guardrail)"},
+    "Devstral-mlx_lm.server": {"granted": 13728, "note": "Kontext funktioniert, aber Toolcalls werden nicht ausgeliefert"}
+  }
+}
