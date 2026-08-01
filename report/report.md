@@ -341,9 +341,20 @@ same models, same LM Studio endpoint. The only variable is how many toolsets are
 | Hermes default, 17 toolsets | Qwen3.5-9B | **failed** — 4/22 passing, 35 steps, never terminated in 15 min |
 | Hermes default, 17 toolsets | gpt-oss-20b | **failed** — file left with a `SyntaxError` after 7 min |
 | **Hermes, `-t terminal,file`** | gpt-oss-20b | **22/22 in 2:28**, tests untouched |
+| Hermes, `-t terminal,file` | Qwen3.5-9B | **failed** — 6/22 after 15.5 min |
 
-The same model that scores 6/6 on this task through a two-tool harness cannot finish it
+The same gpt-oss that scores 6/6 on this task through a two-tool harness cannot finish it
 through a seventeen-tool one. Cutting the toolsets fixed it outright.
+
+**But it did not fix Qwen3.5-9B**, and that bounds the finding. With two toolsets the 9B
+came within two failing tests after eight minutes — then diverged again, ending at 16.
+Memory was never the constraint: it peaked at 11.55 GB, 48 %.
+
+So tool width explains the 21B model's behaviour, not the 9B's. Note that the same 9B
+solves this task 5/6 through my own two-tool harness with terse schemas. Hermes'
+`terminal` and `file` toolsets still bundle several functions each and ship a much larger
+system prompt than two hand-written schemas. Reducing the surface helps; it does not turn
+a 9B into a 21B.
 
 The reason is visible in the tool list Hermes sends with every request:
 
@@ -365,9 +376,13 @@ general-purpose agent locally.** It also explains why Hermes' own documentation 
 default configuration demands a breadth of tool selection that only large models handle
 reliably. Reduce the surface and a 21B model does the job in under three minutes.
 
-> **One caveat on rigour:** these are single runs per configuration, not six. Enough to
-> show the direction, not to quantify it. The effect is large enough that the direction is
-> not in doubt.
+The practical consequence for 24 GB: **a local general-purpose agent costs a 21B-class
+model at ~67 % of memory**, not the 39 % a 9B would have needed. The headroom the small
+model buys you holds for a coding agent like OpenCode — not for this.
+
+> **One caveat on rigour:** these are single runs per configuration, not six. The gpt-oss
+> contrast — fails at 17 toolsets, 22/22 at two — is large enough that the direction is not
+> in doubt. The Qwen3.5-9B result is a single failed run and should be read as such.
 
 ### A related trap: PARALLEL multiplies your KV cache
 

@@ -33,11 +33,12 @@ Devstral's context at 4,864, refused to load Qwen3.6-27B at all, and broke on Ge
 channel format. Nanbeige4.2-3B fails on *both* of LM Studio's engines — only an upstream
 llama.cpp build runs it. The engine version matters, not just the engine.
 
-**And if you are running a general-purpose agent, cut its toolset.** Hermes Agent with its
-17 default toolsets could not finish this task with any model tested — the same gpt-oss
-that scores 6/6 through a two-tool harness left the file with a `SyntaxError`. Restricted
-to `-t terminal,file` it finished in 2:28. Four ways to edit a file and three to run a
-command, offered at every step, is more choice than a 21B model handles reliably.
+**And if you are running a general-purpose agent, cut its toolset — and budget for a
+larger model.** Hermes Agent with its 17 default toolsets could not finish this task with
+any model tested; the same gpt-oss that scores 6/6 through a two-tool harness left the
+file with a `SyntaxError`. Restricted to `-t terminal,file` it finished in 2:28.
+Qwen3.5-9B failed either way. A local general-purpose agent on 24 GB therefore costs a
+21B-class model at ~67 % of memory, not the 39 % a 9B would have needed.
 
 The one insight that saves time before any download: **file size is the wrong number.**
 Two similarly sized models can differ by 8× in KV cache cost. There is a tool for that

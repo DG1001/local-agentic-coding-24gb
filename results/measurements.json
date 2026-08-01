@@ -681,6 +681,17 @@
         "tests_untouched": true,
         "wired_peak_gb": 17.47,
         "wired_peak_pct": 73
+      },
+      "qwen3.5-9b": {
+        "result": "failed",
+        "tests_after": "6/22 passing",
+        "steps": 14,
+        "wall_s": 930,
+        "wired_peak_gb": 11.55,
+        "wired_peak_pct": 48,
+        "tests_untouched": true,
+        "trajectory": "7 failing at start -> 2 failing after 8 min -> 16 failing at 15.5 min",
+        "note": "Came within two tests of solving it, then diverged again. Memory was never the constraint."
       }
     },
     "tool_surface_default": {
@@ -709,7 +720,7 @@
         ]
       }
     },
-    "conclusion": "The bottleneck is not model size, memory or speed - it is the number of simultaneously offered tools. The same model, task and configuration went from unusable to 22/22 in 2:28 by cutting 17 toolsets down to 2.",
-    "caveat": "One run per configuration, not six. Enough to show the direction, not to quantify it."
+    "conclusion": "Reducing the tool surface fixed gpt-oss (17 toolsets: failed; 2 toolsets: 22/22 in 2:28) but not Qwen3.5-9B, which failed either way. So tool width explains the 21B model's behaviour, not the 9B's. The same model solves this task 5/6 through a two-tool custom harness with terse schemas - Hermes' terminal+file toolsets still carry more functions and a much larger system prompt. For a local general-purpose agent on 24 GB the entry ticket is a 21B-class model at ~67 % memory, not the 39 % a 9B would have cost.",
+    "caveat": "One run per configuration, not six. Enough to show the direction, not to quantify it. The gpt-oss contrast (fails at 17 toolsets, 22/22 at 2) is large enough that the direction is not in doubt; the Qwen3.5-9B result is a single failed run and should be read as such."
   }
 }
