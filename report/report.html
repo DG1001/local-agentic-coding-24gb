@@ -396,7 +396,7 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Six models, 221 tool calls, six identical runs per configuration. Every model
+    <p class="standfirst">Seven models, 263 tool calls, six identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
@@ -571,6 +571,7 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
           <tr><th>gpt-oss-20b MXFP4</th><td>MLX</td><td class="num"><span class="pill ok">6 / 6</span></td><td class="num">55 s</td><td class="num">1 / 41</td><td class="num">16.1 GB · 67 %</td></tr>
           <tr><th><strong>Qwen3.5-9B 4-bit</strong></th><td>MLX</td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">57 s</td><td class="num">0 / 28</td><td class="num"><strong>9.4 GB · 39 %</strong></td></tr>
           <tr><th>Gemma 4 12B Q4_K_M</th><td>llama.cpp</td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">156 s</td><td class="num">0 / 30</td><td class="num">12.3 GB · 51 %</td></tr>
+          <tr><th>Nanbeige4.2-3B Q4_K_M</th><td>llama.cpp <em>(upstream only)</em></td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">62 s</td><td class="num">0 / 42</td><td class="num">11.3 GB · 47 %</td></tr>
           <tr><th>Devstral-Small-2-24B IQ4_XS</th><td>llama.cpp</td><td class="num"><span class="pill ok">2 / 2</span></td><td class="num">132 s</td><td class="num">0 / 12</td><td class="num">—</td></tr>
           <tr><th>Qwen3.6-35B-A3B 3-bit</th><td>MLX</td><td class="num"><span class="pill mid">3 / 4</span></td><td class="num">177 s</td><td class="num">0 / 31</td><td class="num"><strong>20.2 GB · 84 %</strong></td></tr>
           <tr><th>Gemma 4 12B MLX-4bit</th><td>MLX</td><td class="num"><span class="pill bad">0 / 6</span></td><td class="num">—</td><td class="num">0 / 16</td><td class="num">engine defect, see Finding 6</td></tr>
@@ -619,10 +620,10 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
 
   <section id="quant">
     <div class="col">
-      <h2><span class="num">Finding 2</span>One malformed tool call in 221</h2>
+      <h2><span class="num">Finding 2</span>One malformed tool call in 263</h2>
       <p>The question that started this investigation was whether 3-bit quantisation was corrupting tool
       arguments. Across the whole study — six models, three prompt sizes, two sampling regimes, plus
-      the repair task — <strong>221 tool calls produced exactly one schema failure</strong>: a
+      the repair task — <strong>263 tool calls produced exactly one schema failure</strong>: a
       <code>write</code> with a completely empty arguments object. The agent recovered on the next step
       and the run still went green.</p>
       <p>The harness validated this itself rather than trusting the agent framework, declaring the JSON
@@ -817,8 +818,7 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
   <section id="engine2">
     <div class="col">
       <h2><span class="num">Finding 6</span>The engine decides usability, not just speed</h2>
-      <p>Three times in one day, switching from MLX to llama.cpp turned a model from unusable into
-      working. Every time, the failure looked like a model failure in the log.</p>
+      <p>Four times in one day, switching engine turned a model from unusable into working. Every time, the failure looked like a model failure in the log.</p>
     </div>
 
     <div class="tablewrap">
@@ -829,11 +829,20 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
           <tr><th>Devstral-Small-2-24B</th><td>context silently capped at 4,864</td><td>16,384 as requested</td></tr>
           <tr><th>Qwen3.6-27B</th><td>guardrail refuses to load at all</td><td>loads at full context</td></tr>
           <tr><th>Gemma 4 12B</th><td><span class="pill bad">0 / 6</span> — channel-marker loop</td><td><span class="pill ok">5 / 6</span></td></tr>
+          <tr><th>Nanbeige4.2-3B</th><td><code>Model type nanbeige not supported</code></td><td>LM Studio's build crashes; upstream works</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="col">
+      <p>The fourth case sharpens the finding. <code>Nanbeige4.2-3B</code> fails on <em>both</em>
+      LM Studio paths — MLX rejects the architecture outright, and the bundled llama.cpp 2.27.1 exits
+      with <code>llama-server exited before becoming healthy, exitCode=1</code>. <code>lms runtime
+      update</code> reports everything already up to date. A <code>brew install llama.cpp</code>
+      (build 10210) runs it without complaint.</p>
+      <p>So it is not enough to choose between MLX and llama.cpp. <strong>The engine version
+      matters</strong> — LM Studio's bundled runtimes lagged this architecture by weeks, and nothing
+      in the CLI hints that a newer build exists elsewhere.</p>
       <p>The Gemma case is the cleanest, because the same model ran the same task through the same
       harness with the same sampling — the engine was the only variable.</p>
       <p>Under LM Studio's MLX path, Gemma's channel markers leak into <code>content</code> as raw text:</p>

@@ -2,7 +2,7 @@
 
 *Field notes — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Six models, 221 tool calls, six identical runs per configuration. Every model aced the
+Seven models, 263 tool calls, six identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
 desktop as the only warning macOS ever gave, and eleven confident conclusions I had to
@@ -102,16 +102,33 @@ The same task for the other models:
 |---|---:|---|---:|---:|---:|---:|
 | gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6** | 55 s | 1/41 | 16.1 GB · 67 % |
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6** | **57 s** | 0/28 | **9.4 GB · 39 %** |
+| Nanbeige4.2-3B Q4_K_M | **2.68 GB** | llama.cpp ¹ | 5/6 | 62 s | 0/42 | 11.3 GB · 47 % |
 | Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6 | 156 s | 0/30 | 12.3 GB · 51 % |
 | Devstral-Small-2-24B IQ4_XS | 12.76 GB | llama.cpp | 2/2 | 132 s | 0/12 | — |
 | Qwen3.6-35B-A3B 3-bit | 15.20 GB | MLX | 3/4 | 177 s | 0/31 | **20.2 GB · 84 %** |
 | Gemma 4 12B MLX-4bit | 6.74 GB | MLX | **0/6** | — | 0/16 | engine defect, see Finding 6 |
+
+¹ Upstream llama.cpp only — LM Studio's bundled runtimes cannot load it at all. See Finding 6.
 
 The Qwen MoE is the slowest despite activating only 3B of its 35B parameters — its
 failures are expensive, and its one bad run burned 8,211 reasoning tokens going nowhere.
 
 Variance is substantial: gpt-oss run 5 finished in 4 tool calls and 556 reasoning tokens,
 run 4 needed 2,605. A factor of 4.7 on an identical task. Single runs tell you little.
+
+### A 3B model matches a 9B
+
+`Nanbeige4.2-3B` scores the same 5/6 at **2.68 GB of weights** — under a third of
+Qwen3.5-9B and on the slower backend, because no engine that ships with LM Studio can
+load it. Median 62 s, or 55 s excluding two outliers at 378 and 413 seconds. Variance is
+its weak point: four runs land between 40 and 65 seconds, two take six times that.
+
+It also illustrates Finding 4 better than any other model here. Its weights are the
+smallest in the set, but **its memory share is higher than Qwen3.5-9B's** — 47 % against
+39 %. All 22 layers are full attention at 8 KV heads and head_dim 128, so the KV cache
+runs 88 KB/token. At 32k that is 2.95 GB of cache against 2.68 GB of weights: **the
+context costs more than the parameters.** Picking it by file size would have been a
+mistake in both directions.
 
 ### Turning off reasoning does not help
 
@@ -133,11 +150,11 @@ only the `/no_think` token in the message actually takes effect.)*
 
 ---
 
-## Finding 2 — One malformed tool call in 221
+## Finding 2 — One malformed tool call in 263
 
 The question that started this investigation was whether 3-bit quantisation was
 corrupting tool arguments. Across the whole study — six models, three prompt sizes, two
-sampling regimes, plus the repair task — **221 tool calls produced exactly one schema
+sampling regimes, plus the repair task — **263 tool calls produced exactly one schema
 failure**: a `write` with a completely empty arguments object. The agent recovered on the
 next step and the run still went green.
 
@@ -257,14 +274,24 @@ on this machine, memory headroom converts directly into stability.
 
 ## Finding 6 — The engine decides usability, not just speed
 
-Three times in one day, switching from MLX to llama.cpp turned a model from unusable into
-working. Every time, the failure looked like a model failure in the log.
+Four times in one day, switching engine turned a model from unusable into working. Every time, the failure looked like a model failure in the log.
 
 | Model | Under MLX | Under GGUF |
 |---|---|---|
 | Devstral-Small-2-24B | context silently capped at 4,864 | 16,384 as requested |
 | Qwen3.6-27B | guardrail refuses to load at all | loads at full context |
 | Gemma 4 12B | **0/6** — channel-marker loop | **5/6** |
+| Nanbeige4.2-3B | `Model type nanbeige not supported` | LM Studio's build crashes; upstream works |
+
+The fourth case sharpens the finding. `Nanbeige4.2-3B` fails on *both* LM Studio paths —
+MLX rejects the architecture outright, and the bundled llama.cpp 2.27.1 exits with
+`llama-server exited before becoming healthy, exitCode=1`. `lms runtime update` reports
+everything already up to date. A `brew install llama.cpp` (build 10210) runs it without
+complaint.
+
+So it is not enough to choose between MLX and llama.cpp. **The engine version matters** —
+LM Studio's bundled runtimes lagged this architecture by weeks, and the CLI gives no hint
+that a newer build exists elsewhere.
 
 The Gemma case is the cleanest, because the same model ran the same task through the same
 harness with the same sampling — the engine was the only variable.
@@ -502,7 +529,7 @@ than the individual cases: a real symptom, a plausible cause, no control experim
 |---|---|---|
 | 09:58 | "wired memory is running away" | ramp to a flat plateau, 30 MB drift. Aborted a valid measurement for nothing |
 | 10:07 | "the output budget is too small" | a direct API call returned a clean tool call in 118 tokens |
-| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 221 tool calls |
+| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 263 tool calls |
 | 10:37 | "system prompt size is irrelevant" | true only under broken sampling. With it fixed, prompt size was the strongest predictor |
 | 10:53 | "max_tokens 2048 is enough" | misread my own table: 70–210 were reasoning, not completion tokens |
 | 11:15 | "it was the sampling" *(published)* | control against gpt-oss: 6/6 with the same broken config |

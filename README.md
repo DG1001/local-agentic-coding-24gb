@@ -3,7 +3,7 @@
 Measurements and tooling for one question: which local model is actually usable for
 agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Six models, 221 tool calls, six identical runs per configuration, measured on an Apple
+Seven models, 263 tool calls, six identical runs per configuration, measured on an Apple
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
@@ -17,6 +17,7 @@ send.
 |---|---:|---|---|---:|
 | gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6**, 55 s median | 67 % |
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6**, 57 s median | **39 %** |
+| Nanbeige4.2-3B Q4_K_M | **2.68 GB** | llama.cpp (upstream) | 5/6, 62 s median | 47 % |
 | Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6, 156 s median | 51 % |
 | Qwen3.6-35B-A3B 3-bit | 15.20 GB | MLX | 3/4, 177 s median | 84 % |
 | Devstral-Small-2-24B | 12.76 GB | llama.cpp | 2/2, 132 s median | — |
@@ -27,9 +28,10 @@ weights, trails it by one run on reliability, and needs 39 % of memory instead o
 Under the agent-sized system prompt it scores **6/6 at an 8.3 s median** — twice as fast
 as gpt-oss on the same test.
 
-**And for three of six models, the inference engine decided usability.** MLX capped
+**And for four of seven models, the inference engine decided usability.** MLX capped
 Devstral's context at 4,864, refused to load Qwen3.6-27B at all, and broke on Gemma's
-channel format. All three worked under llama.cpp.
+channel format. Nanbeige4.2-3B fails on *both* of LM Studio's engines — only an upstream
+llama.cpp build runs it. The engine version matters, not just the engine.
 
 The one insight that saves time before any download: **file size is the wrong number.**
 Two similarly sized models can differ by 8× in KV cache cost. There is a tool for that
@@ -134,7 +136,7 @@ agent framework. That is why it exists: the investigation started with `SchemaEr
 messages from OpenCode, and the framework turned out to be the cause twice. A harness
 with no layer in between separates model behaviour from tool behaviour.
 
-Result across the whole series: **one malformed tool call in 221.**
+Result across the whole series: **one malformed tool call in 263.**
 
 ## Requirements
 

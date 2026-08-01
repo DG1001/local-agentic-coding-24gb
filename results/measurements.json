@@ -412,6 +412,74 @@
           "green": true
         }
       ]
+    },
+    "Nanbeige4.2-3B-Q4_K_M": {
+      "runtime": "llama.cpp upstream build 10210 (brew), NOT LM Studio",
+      "weights_gb": 2.68,
+      "context_granted": 32768,
+      "passed": 5,
+      "of": 6,
+      "median_s": 62.2,
+      "mean_without_outliers_s": 55.3,
+      "range_s": [
+        40.6,
+        412.5
+      ],
+      "tool_calls": 42,
+      "schema_errors": 0,
+      "length_stops": 1,
+      "tests_untouched": "6/6",
+      "wired_median_gb": 10.62,
+      "wired_peak_gb": 11.28,
+      "wired_peak_pct": 47,
+      "prompt_cache_hit_rate": 0.79,
+      "note": "Same score as Qwen3.5-9B at a third of the parameters, but on the slower backend. Heavy variance: four runs at 40-65 s, two at 378 and 413 s. Memory share is HIGHER than Qwen3.5-9B (47 % vs 39 %) despite less than half the weights - the KV cache is 88 KB/token because all 22 layers are full attention.",
+      "runs": [
+        {
+          "steps": 11,
+          "bash": 9,
+          "write": 1,
+          "wall_s": 412.5,
+          "green": true,
+          "length_stop": true
+        },
+        {
+          "steps": 7,
+          "bash": 5,
+          "write": 1,
+          "wall_s": 59.4,
+          "green": true
+        },
+        {
+          "steps": 9,
+          "bash": 7,
+          "write": 1,
+          "wall_s": 65.0,
+          "green": true
+        },
+        {
+          "steps": 5,
+          "bash": 4,
+          "write": 0,
+          "wall_s": 40.6,
+          "green": false,
+          "note": "gave up without an edit - benign failure mode"
+        },
+        {
+          "steps": 9,
+          "bash": 7,
+          "write": 1,
+          "wall_s": 377.8,
+          "green": true
+        },
+        {
+          "steps": 6,
+          "bash": 5,
+          "write": 1,
+          "wall_s": 56.2,
+          "green": true
+        }
+      ]
     }
   },
   "kv_cache": {
@@ -468,6 +536,14 @@
       "head_dim": 128,
       "kb_per_token": 160,
       "note": "older generation, no hybrid attention"
+    },
+    "Nanbeige4.2-3B": {
+      "layers": 22,
+      "full_attention": 22,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "kb_per_token": 88,
+      "note": "KV cache exceeds the weights at 32k context: 2.95 GB vs 2.68 GB."
     }
   },
   "wired_memory_trace": {
@@ -562,6 +638,14 @@
       "gguf": "loads at full context",
       "verdict": "GGUF"
     },
-    "cost": "On Apple Silicon llama.cpp runs roughly 2.4x behind MLX because it does not use the neural accelerators."
+    "cost": "On Apple Silicon llama.cpp runs roughly 2.4x behind MLX because it does not use the neural accelerators.",
+    "Nanbeige4.2-3B": {
+      "lmstudio_mlx": "ValueError: Model type nanbeige not supported (mlx-llm 1.11.0)",
+      "lmstudio_gguf": "llama-server exited before becoming healthy, exitCode=1 (llama.cpp 2.27.1)",
+      "lms_runtime_update": "reports 'already up-to-date' - 2.27.1 is the newest offered",
+      "upstream_llamacpp": "works (brew build 10210)",
+      "verdict": "upstream llama.cpp only",
+      "lesson": "It is not enough to choose between MLX and llama.cpp - the engine VERSION matters. LM Studio's bundled runtimes lagged the architecture support by weeks."
+    }
   }
 }
