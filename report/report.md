@@ -327,7 +327,61 @@ sides of the same thing.
 
 ---
 
-## Finding 7 — Wired memory is a step function, and pressure monitoring cannot see it
+## Finding 7 — Seventeen tools break what two tools solve
+
+Everything so far compares models and engines. This one compares **agent configuration**,
+and it turned out to matter more than either.
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) is a general-purpose agent,
+not a coding agent — the local-model equivalent of what OpenClaw does. Same repair task,
+same models, same LM Studio endpoint. The only variable is how many toolsets are enabled.
+
+| Configuration | Model | Result |
+|---|---|---|
+| Hermes default, 17 toolsets | Qwen3.5-9B | **failed** — 4/22 passing, 35 steps, never terminated in 15 min |
+| Hermes default, 17 toolsets | gpt-oss-20b | **failed** — file left with a `SyntaxError` after 7 min |
+| **Hermes, `-t terminal,file`** | gpt-oss-20b | **22/22 in 2:28**, tests untouched |
+
+The same model that scores 6/6 on this task through a two-tool harness cannot finish it
+through a seventeen-tool one. Cutting the toolsets fixed it outright.
+
+The reason is visible in the tool list Hermes sends with every request:
+
+| To do this | it offers |
+|---|---|
+| read a file | `read`, `read_file` |
+| modify a file | `write`, `write_file`, `patch`, `edit` |
+| run a command | `bash`, `terminal`, `execute_code` |
+| search | `grep`, `search_files`, `glob` |
+
+Four ways to edit a file and three to run a command, every step, for a model that has to
+pick correctly each time. Prompt size is not the issue — Hermes' largest request measured
+~5,120 tokens, and Qwen3.5-9B handles 5,600 tokens of system prompt at 6/6. It is the
+width of the choice.
+
+**This is the practically most consequential finding here for anyone running a
+general-purpose agent locally.** It also explains why Hermes' own documentation recommends
+70B-class models: not because smaller ones are too weak at the task, but because the
+default configuration demands a breadth of tool selection that only large models handle
+reliably. Reduce the surface and a 21B model does the job in under three minutes.
+
+> **One caveat on rigour:** these are single runs per configuration, not six. Enough to
+> show the direction, not to quantify it. The effect is large enough that the direction is
+> not in doubt.
+
+### A related trap: PARALLEL multiplies your KV cache
+
+While setting this up I raised gpt-oss to 65,536 context because Hermes asks for at least
+64K — and the desktop started flickering again. Wired had reached **18.75 GB (78 %)**.
+
+LM Studio defaults to `PARALLEL 4`, and it holds the KV cache **per slot**. What should
+have been 1.57 GB of cache became up to 6.3 GB. With `--parallel 1` the identical context
+peaked at 17.47 GB (73 %) and ran fine. For a single agent, one slot is all you need — and
+the `PARALLEL` column has been sitting in every `lms ps` output all along.
+
+---
+
+## Finding 8 — Wired memory is a step function, and pressure monitoring cannot see it
 
 MLX loads safetensors via `mmap`. At idle those pages are file-backed — active or
 inactive, not wired. The moment inference starts the GPU wires them, and wired memory
@@ -359,7 +413,7 @@ The plateau runs roughly **weights + 2–3 GB** on top of whatever the OS alread
 
 ---
 
-## Finding 8 — You can trade the whole memory problem away, for latency
+## Finding 9 — You can trade the whole memory problem away, for latency
 
 Everything above fights for headroom inside 24 GB.
 [TurboFieldfare](https://github.com/drumih/turbo-fieldfare) sidesteps the fight: a Swift
@@ -376,7 +430,7 @@ The memory claim is not marketing:
 | Qwen3.6-35B-A3B · MLX | 35B | 20.17 GB | 84 % | 14.16 GiB |
 
 A 26-billion-parameter model at 24 % of memory. The entire band where the kernel bug from
-Finding 9 lives is no longer reachable. Prompt-prefix reuse works too: 12,642 of 20,087
+Finding 10 lives is no longer reachable. Prompt-prefix reuse works too: 12,642 of 20,087
 prompt tokens came from cache.
 
 **And then it is too slow.** That verdict comes from actually driving it through
@@ -399,7 +453,7 @@ memory you did not need.
 
 ---
 
-## Finding 9 — The kernel panic is an unresolved Apple bug, not MLX
+## Finding 10 — The kernel panic is an unresolved Apple bug, not MLX
 
 Mid-session the machine went down hard:
 
@@ -452,7 +506,7 @@ misconfiguration in Finding 3.
 
 ---
 
-## Finding 10 — Three fixes that made things measurably worse
+## Finding 11 — Three fixes that made things measurably worse
 
 | Change | Intent | Success | What happened |
 |---|---|---:|---|
@@ -473,7 +527,7 @@ completions reached 2,361.
 
 ---
 
-## Finding 11 — Tooling behaviour that costs an hour each
+## Finding 12 — Tooling behaviour that costs an hour each
 
 ### LM Studio
 

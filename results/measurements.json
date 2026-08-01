@@ -646,6 +646,70 @@
       "upstream_llamacpp": "works (brew build 10210)",
       "verdict": "upstream llama.cpp only",
       "lesson": "It is not enough to choose between MLX and llama.cpp - the engine VERSION matters. LM Studio's bundled runtimes lagged the architecture support by weeks."
-    }
+    },
+    "_note_parallel": "LM Studio's PARALLEL setting multiplies KV cache. gpt-oss at 65536 context with PARALLEL 4 reached 18.75 GB wired (78 %) and made the desktop flicker; with --parallel 1 the same context peaked at 17.47 GB (73 %). For a single agent, one slot is enough."
+  },
+  "agent_harness": {
+    "_comment": "Hermes Agent v0.19.1 (a general-purpose agent, not a coding agent) against the same repair task. The only variable is how many toolsets are enabled.",
+    "task": "same ISO-8601 repair task, 15/22 passing at start",
+    "hermes_default_17_toolsets": {
+      "qwen3.5-9b": {
+        "result": "failed",
+        "tests_after": "4/22 passing",
+        "steps": 35,
+        "messages": 72,
+        "wall_s": 900,
+        "note": "killed by watchdog after 15 min, never terminated. Left the file worse than it started."
+      },
+      "gpt-oss-20b": {
+        "result": "failed",
+        "tests_after": "SyntaxError",
+        "messages": 38,
+        "wall_s": 420,
+        "note": "terminated by operator after 7 min; file left syntactically invalid."
+      }
+    },
+    "hermes_two_toolsets": {
+      "toolsets": [
+        "terminal",
+        "file"
+      ],
+      "gpt-oss-20b": {
+        "result": "passed",
+        "tests_after": "22/22 passing",
+        "wall_s": 148,
+        "tests_untouched": true,
+        "wired_peak_gb": 17.47,
+        "wired_peak_pct": 73
+      }
+    },
+    "tool_surface_default": {
+      "toolsets": 17,
+      "tools_per_request": 17,
+      "overlapping_names": {
+        "read a file": [
+          "read",
+          "read_file"
+        ],
+        "modify a file": [
+          "write",
+          "write_file",
+          "patch",
+          "edit"
+        ],
+        "run a command": [
+          "bash",
+          "terminal",
+          "execute_code"
+        ],
+        "search": [
+          "grep",
+          "search_files",
+          "glob"
+        ]
+      }
+    },
+    "conclusion": "The bottleneck is not model size, memory or speed - it is the number of simultaneously offered tools. The same model, task and configuration went from unusable to 22/22 in 2:28 by cutting 17 toolsets down to 2.",
+    "caveat": "One run per configuration, not six. Enough to show the direction, not to quantify it."
   }
 }

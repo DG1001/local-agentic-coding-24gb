@@ -871,9 +871,78 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
     </div>
   </section>
 
+  <section id="toolsurface">
+    <div class="col">
+      <h2><span class="num">Finding 7</span>Seventeen tools break what two tools solve</h2>
+      <p>Everything so far compares models and engines. This one compares <strong>agent
+      configuration</strong>, and it turned out to matter more than either.</p>
+      <p><a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> is a general-purpose
+      agent, not a coding agent — the local-model equivalent of what OpenClaw does. Same repair task,
+      same models, same LM Studio endpoint. The only variable is how many toolsets are enabled.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Hermes Agent v0.19.1 against the ISO-8601 repair task</caption>
+        <thead><tr><th>Configuration</th><th>Model</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><th>default, 17 toolsets</th><td>Qwen3.5-9B</td><td><span class="pill bad">failed</span> — 4/22 passing, 35 steps, never terminated in 15 min</td></tr>
+          <tr><th>default, 17 toolsets</th><td>gpt-oss-20b</td><td><span class="pill bad">failed</span> — file left with a <code>SyntaxError</code> after 7 min</td></tr>
+          <tr><th><code>-t terminal,file</code></th><td>gpt-oss-20b</td><td><span class="pill ok">22/22 in 2:28</span>, tests untouched</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>The same model that scores 6/6 on this task through a two-tool harness cannot finish it
+      through a seventeen-tool one. Cutting the toolsets fixed it outright.</p>
+      <p>The reason is visible in the tool list Hermes sends with every request:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Overlapping tool names in the default configuration</caption>
+        <thead><tr><th>To do this</th><th>it offers</th></tr></thead>
+        <tbody>
+          <tr><th>read a file</th><td><code>read</code>, <code>read_file</code></td></tr>
+          <tr><th>modify a file</th><td><code>write</code>, <code>write_file</code>, <code>patch</code>, <code>edit</code></td></tr>
+          <tr><th>run a command</th><td><code>bash</code>, <code>terminal</code>, <code>execute_code</code></td></tr>
+          <tr><th>search</th><td><code>grep</code>, <code>search_files</code>, <code>glob</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Four ways to edit a file and three to run a command, every step, for a model that has to pick
+      correctly each time. Prompt size is not the issue — Hermes' largest request measured ~5,120
+      tokens, and Qwen3.5-9B handles 5,600 tokens of system prompt at 6/6. It is the width of the
+      choice.</p>
+      <p><strong>This is the practically most consequential finding here for anyone running a
+      general-purpose agent locally.</strong> It also explains why Hermes' own documentation recommends
+      70B-class models: not because smaller ones are too weak at the task, but because the default
+      configuration demands a breadth of tool selection that only large models handle reliably. Reduce
+      the surface and a 21B model does the job in under three minutes.</p>
+
+      <div class="callout warn">
+        <div class="label">One caveat on rigour</div>
+        <p>These are single runs per configuration, not six. Enough to show the direction, not to
+        quantify it. The effect is large enough that the direction is not in doubt.</p>
+      </div>
+
+      <h3>A related trap: PARALLEL multiplies your KV cache</h3>
+      <p>While setting this up I raised gpt-oss to 65,536 context because Hermes asks for at least 64K
+      — and the desktop started flickering again. Wired had reached <strong>18.75 GB (78 %)</strong>.</p>
+      <p>LM Studio defaults to <code>PARALLEL 4</code>, and it holds the KV cache <em>per slot</em>.
+      What should have been 1.57 GB of cache became up to 6.3 GB. With <code>--parallel 1</code> the
+      identical context peaked at 17.47 GB (73 %) and ran fine. For a single agent, one slot is all you
+      need — and the <code>PARALLEL</code> column has been sitting in every <code>lms ps</code> output
+      all along.</p>
+    </div>
+  </section>
+
   <section id="memory">
     <div class="col">
-      <h2><span class="num">Finding 7</span>Wired memory is a step function, and pressure monitoring cannot see it</h2>
+      <h2><span class="num">Finding 8</span>Wired memory is a step function, and pressure monitoring cannot see it</h2>
       <p>MLX loads safetensors via <code>mmap</code>. At idle those pages are file-backed — active or
       inactive, not wired. The moment inference starts the GPU wires them, and wired memory jumps to a
       plateau in under two seconds. Sampling <code>memory_pressure</code> every two seconds through one
@@ -935,7 +1004,7 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
 
   <section id="streaming">
     <div class="col">
-      <h2><span class="num">Finding 8</span>You can trade the whole memory problem away — for latency</h2>
+      <h2><span class="num">Finding 9</span>You can trade the whole memory problem away — for latency</h2>
       <p>Everything above fights for headroom inside 24 GB. <a href="https://github.com/drumih/turbo-fieldfare">TurboFieldfare</a>
       sidesteps the fight entirely: a Swift and Metal runtime, no MLX and no llama.cpp, written for one
       model — Gemma 4 26B-A4B. It keeps a 1.35 GB shared core resident and <strong>streams each token's
@@ -996,7 +1065,7 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
 
   <section id="panic">
     <div class="col">
-      <h2><span class="num">Finding 9</span>The kernel panic is an unresolved Apple bug, not an MLX one</h2>
+      <h2><span class="num">Finding 10</span>The kernel panic is an unresolved Apple bug, not an MLX one</h2>
       <p>Mid-session, the machine went down hard:</p>
 <pre><code>panic(cpu 12 caller 0xfffffe0050784280):
 "pending memory object unexpectedly found in non pending hash"
@@ -1065,7 +1134,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
 
   <section id="worse">
     <div class="col">
-      <h2><span class="num">Finding 10</span>Three fixes that made things measurably worse</h2>
+      <h2><span class="num">Finding 11</span>Three fixes that made things measurably worse</h2>
       <p>All three seemed obviously right. They are here because I measured them.</p>
     </div>
 
@@ -1105,7 +1174,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
 
   <section id="gotchas">
     <div class="col">
-      <h2><span class="num">Finding 11</span>Tooling behaviour that will cost you an hour each</h2>
+      <h2><span class="num">Finding 12</span>Tooling behaviour that will cost you an hour each</h2>
 
       <h3>LM Studio</h3>
       <ul>
