@@ -51,6 +51,32 @@ The one insight that saves time before any download: **file size is the wrong nu
 Two similarly sized models can differ by 8× in KV cache cost. There is a tool for that
 here.
 
+## If you landed here from a search
+
+These are the concrete symptoms this study diagnosed. Each one looked like a model
+failure and was not.
+
+| Symptom | Cause | Where |
+|---|---|---|
+| `Model type nanbeige not supported` | LM Studio's MLX runtime predates the architecture; upstream llama.cpp runs it | Finding 6 |
+| `llama-server exited before becoming healthy, exitCode=1` | LM Studio's bundled llama.cpp is too old — `lms runtime update` still says "up-to-date" | Finding 6 |
+| `<\|channel>thought` repeating until the token limit | LM Studio's MLX path does not strip Gemma 4's channel markers; GGUF does | Finding 6 |
+| `The number of tokens to keep from the initial prompt is greater than the context length` | LM Studio silently capped the context at load — check the `CONTEXT` column of `lms ps` | Finding 4 |
+| Model loads fine but `lms ps` shows less context than requested | KV cache does not fit; recompute with `tools/kvcalc.py` | Finding 4 |
+| Desktop flickers while a model generates | Wired memory past ~80 %; WindowServer is starved. Save and unload | Finding 10 |
+| `panic ... @IOGPUGroupMemory.cpp` after a long agent session | Unresolved Apple IOGPU defect, triggered by unbounded KV growth | Finding 10 |
+| `opencode run` hangs, or exits instantly with code 0 and an empty log | `permission` defaults to `ask`; without a TTY it gets EOF | Finding 12 |
+| Agent rambles instead of calling tools | Sampling (`temp 0.3` without `top_k`/`top_p`) on a fragile model, or too many tools offered | Findings 3, 7 |
+| `lms get` reports success but nothing downloaded | It returns exit code 0 on failure — check file sizes | Finding 12 |
+| `hf download` aborts instantly, target directory stays at 4 KB | `HF_HUB_ENABLE_HF_TRANSFER=1` set but `hf_transfer` not installed | Finding 12 |
+| Wired memory far higher than weights + KV | LM Studio's `PARALLEL` holds the KV cache per slot — use `--parallel 1` | Finding 7 |
+
+**Models measured here:** gpt-oss-20b · Qwen3.5-9B · Qwen3.6-35B-A3B · Qwen3.6-27B ·
+Devstral-Small-2-24B · Gemma 4 12B · Gemma 4 26B-A4B · Nanbeige4.2-3B
+**Runtimes:** MLX · llama.cpp · TurboFieldfare (SSD expert streaming)
+**Harnesses:** OpenCode · Hermes Agent · a purpose-built 180-line Python loop
+**Hardware:** Apple M5 Pro, 24 GB unified memory, macOS 26.6
+
 ## `tools/kvcalc.py` — will it fit?
 
 Reads `config.json`, counts the layers that actually cost KV cache, and works out what

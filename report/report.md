@@ -116,6 +116,13 @@ failures are expensive, and its one bad run burned 8,211 reasoning tokens going 
 Variance is substantial: gpt-oss run 5 finished in 4 tool calls and 556 reasoning tokens,
 run 4 needed 2,605. A factor of 4.7 on an identical task. Single runs tell you little.
 
+The same effect appears at a larger scale in the 128 GB study, where it is named the
+*agentic multiplier*: between two models whose token rates differ 7× (4.5 vs 30.4 tok/s),
+actual task completion differed **20×** — 1,788 s against 90 s on the same bug hunt. Model
+behaviour amplifies hardware differences. Our own numbers show the shape of it: the Qwen
+MoE was the slowest model in the set despite activating only 3B of 35B parameters, because
+its failures were expensive.
+
 ### A 3B model matches a 9B
 
 `Nanbeige4.2-3B` scores the same 5/6 at **2.68 GB of weights** — under a third of
@@ -242,6 +249,17 @@ bytes/token = full_attention_layers
 
 [`tools/kvcalc.py`](../tools/kvcalc.py) computes this from `config.json` before you spend
 a gigabyte of bandwidth.
+
+> **On other hardware the wrong number is a different one.** A
+> [companion study on a 128 GB DGX-Spark-class box](https://github.com/DG1001/local-agentic-coding-128gb)
+> (NVIDIA GB10, ~273 GB/s) reaches the same conclusion from the opposite direction: there
+> memory is never the constraint, **bandwidth** is, and the number to select on is *active*
+> parameters. A dense Qwen3.6-27B runs at 4.5 tok/s while a MoE with ~3B active does 30.4 —
+> at 96 % GPU utilisation and 43.6 W, i.e. the compute units idling on memory.
+>
+> Both studies land on the same warning and a different remedy: file size tells you
+> nothing. At 24 GB compute **weights + KV at your context**; on bandwidth-bound hardware
+> count **active parameters**.
 
 > **LM Studio silently capped the context.** I requested 16,384 tokens. The model loaded
 > successfully in 6.1 seconds with no warning of any kind — and the `CONTEXT` column of

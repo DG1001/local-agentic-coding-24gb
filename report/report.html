@@ -615,6 +615,10 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
       the sign after summation. No invented features, no gratuitous restructuring.</p>
       <p>Note the variance: run 5 finished in 4 tool calls and 556 reasoning tokens, run 4 needed 2,605.
       A factor of 4.7 on an identical task. Single runs tell you very little here.</p>
+      <p>The same effect appears at a larger scale in the 128 GB study, where it is named the
+      <em>agentic multiplier</em>: between two models whose token rates differ 7× (4.5 vs 30.4 tok/s),
+      actual task completion differed <strong>20×</strong> — 1,788 s against 90 s on the same bug hunt.
+      Model behaviour amplifies hardware differences.</p>
     </div>
   </section>
 
@@ -757,6 +761,19 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
       <p>Devstral itself performed well within that ceiling — 6/6 on the small prompt, 11.4 s median, the
       fastest of the three, 13 clean tool calls. It is not a bad model on this hardware. It just cannot
       hold an agent's instructions and a conversation at the same time.</p>
+      <div class="callout key">
+        <div class="label">On other hardware the wrong number is a different one</div>
+        <p>A <a href="https://github.com/DG1001/local-agentic-coding-128gb">companion study on a 128 GB
+        DGX-Spark-class box</a> (NVIDIA GB10, ~273 GB/s) reaches the same conclusion from the opposite
+        direction: there memory is never the constraint, <strong>bandwidth</strong> is, and the number
+        to select on is <em>active</em> parameters. A dense Qwen3.6-27B runs at 4.5 tok/s while a MoE
+        with ~3B active does 30.4 — at 96 % GPU utilisation and 43.6 W, i.e. compute units idling on
+        memory.</p>
+        <p>Both studies land on the same warning and a different remedy: file size tells you nothing.
+        At 24 GB compute <strong>weights + KV at your context</strong>; on bandwidth-bound hardware
+        count <strong>active parameters</strong>.</p>
+      </div>
+
       <p>The number to select on is therefore <strong>weights + KV cache at the context you actually
       need</strong>, and you can compute it from <code>config.json</code> before spending a single
       gigabyte of bandwidth. I had this formula in my notes from the second hour and still chose
