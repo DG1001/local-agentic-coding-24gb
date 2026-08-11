@@ -7,6 +7,13 @@ Seven models, 263 tool calls, six identical runs per configuration, measured on 
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
+> **Companion repo — the same question with 128 GB:**
+> [local-agentic-coding-128gb](https://github.com/DG1001/local-agentic-coding-128gb)
+> runs five large models (DeepSeek-V4-Flash, Laguna-S-2.1, KAT-Coder-V2.5, …) on an
+> NVIDIA GB10 / DGX Spark-class box. The conclusions barely overlap with this one: at
+> 24 GB the binding constraint is tooling, at 128 GB it is **memory bandwidth** — and
+> the choice of agent harness turns out to matter as much as the model.
+
 ## The short version
 
 With a one-sentence system prompt, every model passes. What separates them is a
