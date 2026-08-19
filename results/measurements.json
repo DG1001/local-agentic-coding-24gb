@@ -480,6 +480,75 @@
           "green": true
         }
       ]
+    },
+    "Qwen3.8-27B-UD-IQ4_XS": {
+      "runtime": "llama.cpp (GGUF)",
+      "quant": "unsloth UD-IQ4_XS",
+      "weights_gb": 14.25,
+      "context_granted": 16384,
+      "parallel": 1,
+      "passed": 6,
+      "of": 6,
+      "median_s": 211.9,
+      "range_s": [
+        180.4,
+        261.9
+      ],
+      "tool_calls": 39,
+      "schema_errors": 0,
+      "tests_untouched": "6/6",
+      "wired_peak_gb": 17.42,
+      "note": "Dense 27B. Second model after gpt-oss to reach 6/6, but ~4x the wall-clock for the same result. kvcalc predicted 17.82 GB at 16k, measured 17.42 GB.",
+      "runs": [
+        {
+          "steps": 5,
+          "bash": 4,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": 975,
+          "wall_s": 196.6
+        },
+        {
+          "steps": 6,
+          "bash": 5,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": 571,
+          "wall_s": 180.4
+        },
+        {
+          "steps": 7,
+          "bash": 7,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": 1067,
+          "wall_s": 257.4
+        },
+        {
+          "steps": 7,
+          "bash": 7,
+          "write": 0,
+          "schema_errors": 0,
+          "reasoning": 533,
+          "wall_s": 185.3
+        },
+        {
+          "steps": 7,
+          "bash": 5,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": 810,
+          "wall_s": 227.3
+        },
+        {
+          "steps": 7,
+          "bash": 6,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": 1113,
+          "wall_s": 261.9
+        }
+      ]
     }
   },
   "kv_cache": {

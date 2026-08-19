@@ -3,7 +3,7 @@
 Measurements and tooling for one question: which local model is actually usable for
 agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Seven models, 263 tool calls, six identical runs per configuration, measured on an Apple
+Eight models, 302 tool calls, six identical runs per configuration, measured on an Apple
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
@@ -23,6 +23,7 @@ send.
 | Model | Weights | Engine | Repair task | Wired |
 |---|---:|---|---|---:|
 | gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6**, 55 s median | 67 % |
+| Qwen3.8-27B IQ4_XS | 14.25 GB | llama.cpp | **6/6**, 212 s median | 73 % |
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6**, 57 s median | **39 %** |
 | Nanbeige4.2-3B Q4_K_M | **2.68 GB** | llama.cpp (upstream) | 5/6, 62 s median | 47 % |
 | Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6, 156 s median | 51 % |
@@ -35,7 +36,13 @@ weights, trails it by one run on reliability, and needs 39 % of memory instead o
 Under the agent-sized system prompt it scores **6/6 at an 8.3 s median** — twice as fast
 as gpt-oss on the same test.
 
-**And for four of seven models, the inference engine decided usability.** MLX capped
+**Two models score 6/6 — and one of them takes four times as long.** Qwen3.8-27B, dense
+and 14.25 GB, matches gpt-oss exactly on reliability and needs a 212 s median against
+55 s. Dense models compute every parameter per token; MoE models activate a fraction.
+Pick by *active* parameters, not total ones — the companion study measures the same
+effect at 128 GB.
+
+**And for four of eight models, the inference engine decided usability.** MLX capped
 Devstral's context at 4,864, refused to load Qwen3.6-27B at all, and broke on Gemma's
 channel format. Nanbeige4.2-3B fails on *both* of LM Studio's engines — only an upstream
 llama.cpp build runs it. The engine version matters, not just the engine.
@@ -70,8 +77,9 @@ failure and was not.
 | `lms get` reports success but nothing downloaded | It returns exit code 0 on failure — check file sizes | Finding 12 |
 | `hf download` aborts instantly, target directory stays at 4 KB | `HF_HUB_ENABLE_HF_TRANSFER=1` set but `hf_transfer` not installed | Finding 12 |
 | Wired memory far higher than weights + KV | LM Studio's `PARALLEL` holds the KV cache per slot — use `--parallel 1` | Finding 7 |
+| A ~16 GB quant refuses to load, a ~14 GB one is fine | Guardrail threshold, not a hard limit — recompute with `tools/kvcalc.py` before blaming the model | Findings 4, 5 |
 
-**Models measured here:** gpt-oss-20b · Qwen3.5-9B · Qwen3.6-35B-A3B · Qwen3.6-27B ·
+**Models measured here:** gpt-oss-20b · Qwen3.5-9B · Qwen3.8-27B · Qwen3.6-35B-A3B · Qwen3.6-27B ·
 Devstral-Small-2-24B · Gemma 4 12B · Gemma 4 26B-A4B · Nanbeige4.2-3B
 **Runtimes:** MLX · llama.cpp · TurboFieldfare (SSD expert streaming)
 **Harnesses:** OpenCode · Hermes Agent · a purpose-built 180-line Python loop
@@ -176,7 +184,7 @@ agent framework. That is why it exists: the investigation started with `SchemaEr
 messages from OpenCode, and the framework turned out to be the cause twice. A harness
 with no layer in between separates model behaviour from tool behaviour.
 
-Result across the whole series: **one malformed tool call in 263.**
+Result across the whole series: **one malformed tool call in 302.**
 
 ## Requirements
 

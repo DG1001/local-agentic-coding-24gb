@@ -2,7 +2,7 @@
 
 *Field notes — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Seven models, 263 tool calls, six identical runs per configuration. Every model aced the
+Eight models, 302 tool calls, six identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
 desktop as the only warning macOS ever gave, and eleven confident conclusions I had to
@@ -101,6 +101,7 @@ The same task for the other models:
 | Model | Weights | Engine | Verified | Median | Schema errors | Wired |
 |---|---:|---|---:|---:|---:|---:|
 | gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6** | 55 s | 1/41 | 16.1 GB · 67 % |
+| Qwen3.8-27B IQ4_XS | 14.25 GB | llama.cpp | **6/6** | 212 s | 0/39 | 17.4 GB · 73 % |
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6** | **57 s** | 0/28 | **9.4 GB · 39 %** |
 | Nanbeige4.2-3B Q4_K_M | **2.68 GB** | llama.cpp ¹ | 5/6 | 62 s | 0/42 | 11.3 GB · 47 % |
 | Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6 | 156 s | 0/30 | 12.3 GB · 51 % |
@@ -157,11 +158,11 @@ only the `/no_think` token in the message actually takes effect.)*
 
 ---
 
-## Finding 2 — One malformed tool call in 263
+## Finding 2 — One malformed tool call in 302
 
 The question that started this investigation was whether 3-bit quantisation was
 corrupting tool arguments. Across the whole study — six models, three prompt sizes, two
-sampling regimes, plus the repair task — **263 tool calls produced exactly one schema
+sampling regimes, plus the repair task — **302 tool calls produced exactly one schema
 failure**: a `write` with a completely empty arguments object. The agent recovered on the
 next step and the run still went green.
 
@@ -287,6 +288,30 @@ the Qwen MoE's failures, which were expensive and could not be aborted.
 Which inverts the question this investigation started with. It began as "which large
 model still fits" and ends at **"which smallest model does the job reliably"** — because
 on this machine, memory headroom converts directly into stability.
+
+### The counter-test: a dense 27B that also scores 6/6
+
+`Qwen3.8-27B` (released 14 August 2026) is the strongest case against that conclusion,
+and it loses on time. In `unsloth`'s `UD-IQ4_XS` quantisation it is 14.25 GB, loads with
+16,384 tokens of context at **73 % wired**, and returns **6/6 with zero schema errors in
+39 tool calls** — the second model in this series to match gpt-oss's perfect score, and it
+does so more consistently: 5 to 7 steps every run, where gpt-oss ranged from 5 to 10.
+
+It is also **four times slower**: a 212 s median against gpt-oss's 55 s, for an identical
+result. That gap is architectural, not incidental. gpt-oss is a mixture-of-experts and
+activates a fraction of its parameters per token; a dense 27B computes all of them. The
+[128 GB companion study](https://github.com/DG1001/local-agentic-coding-128gb) measured
+the same shape on entirely different hardware — a dense 27B there scored a perfect 86/86
+and needed 3 h 07 m at 4.5 tok/s, against minutes for MoE models of comparable quality.
+**Pick by active parameters, not by total parameters**, and the rule holds at both ends of
+the memory range.
+
+Two practical notes for this model specifically. Unsloth's "runs well on a 24 GB Mac"
+applies to `UD-IQ4_XS` and below — `UD-Q4_K_M` (16.46 GB) and the MLX 4-bit build
+(16.05 GB) project to 83–88 %, the same band in which LM Studio's guardrail refused
+Qwen3.6-27B outright. And `lms load` defaults `PARALLEL` to **4**: without an explicit
+`--parallel 1`, the 1.07 GB KV cache is held four times over and the same configuration
+lands at 88 % instead of 73 %.
 
 ---
 
@@ -616,7 +641,7 @@ than the individual cases: a real symptom, a plausible cause, no control experim
 |---|---|---|
 | 09:58 | "wired memory is running away" | ramp to a flat plateau, 30 MB drift. Aborted a valid measurement for nothing |
 | 10:07 | "the output budget is too small" | a direct API call returned a clean tool call in 118 tokens |
-| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 263 tool calls |
+| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 302 tool calls |
 | 10:37 | "system prompt size is irrelevant" | true only under broken sampling. With it fixed, prompt size was the strongest predictor |
 | 10:53 | "max_tokens 2048 is enough" | misread my own table: 70–210 were reasoning, not completion tokens |
 | 11:15 | "it was the sampling" *(published)* | control against gpt-oss: 6/6 with the same broken config |

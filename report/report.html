@@ -396,7 +396,7 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Seven models, 263 tool calls, six identical runs per configuration. Every model
+    <p class="standfirst">Eight models, 302 tool calls, six identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
@@ -569,6 +569,7 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
         </thead>
         <tbody>
           <tr><th>gpt-oss-20b MXFP4</th><td>MLX</td><td class="num"><span class="pill ok">6 / 6</span></td><td class="num">55 s</td><td class="num">1 / 41</td><td class="num">16.1 GB · 67 %</td></tr>
+          <tr><th>Qwen3.8-27B IQ4_XS</th><td>llama.cpp</td><td class="num"><span class="pill ok">6 / 6</span></td><td class="num">212 s</td><td class="num">0 / 39</td><td class="num">17.4 GB · 73 %</td></tr>
           <tr><th><strong>Qwen3.5-9B 4-bit</strong></th><td>MLX</td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">57 s</td><td class="num">0 / 28</td><td class="num"><strong>9.4 GB · 39 %</strong></td></tr>
           <tr><th>Gemma 4 12B Q4_K_M</th><td>llama.cpp</td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">156 s</td><td class="num">0 / 30</td><td class="num">12.3 GB · 51 %</td></tr>
           <tr><th>Nanbeige4.2-3B Q4_K_M</th><td>llama.cpp <em>(upstream only)</em></td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">62 s</td><td class="num">0 / 42</td><td class="num">11.3 GB · 47 %</td></tr>
@@ -624,10 +625,10 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
 
   <section id="quant">
     <div class="col">
-      <h2><span class="num">Finding 2</span>One malformed tool call in 263</h2>
+      <h2><span class="num">Finding 2</span>One malformed tool call in 302</h2>
       <p>The question that started this investigation was whether 3-bit quantisation was corrupting tool
       arguments. Across the whole study — six models, three prompt sizes, two sampling regimes, plus
-      the repair task — <strong>263 tool calls produced exactly one schema failure</strong>: a
+      the repair task — <strong>302 tool calls produced exactly one schema failure</strong>: a
       <code>write</code> with a completely empty arguments object. The agent recovered on the next step
       and the run still went green.</p>
       <p>The harness validated this itself rather than trusting the agent framework, declaring the JSON
@@ -829,6 +830,26 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
       <p>Which inverts the question this investigation started with. It began as "which large model
       still fits" and ends at <strong>"which smallest model does the job reliably"</strong> — because on
       this machine, memory headroom converts directly into stability.</p>
+      <h3>The counter-test: a dense 27B that also scores 6/6</h3>
+      <p><code>Qwen3.8-27B</code> (released 14 August 2026) is the strongest case against that
+      conclusion, and it loses on time. In <code>unsloth</code>'s <code>UD-IQ4_XS</code> quantisation it
+      is 14.25 GB, loads with 16,384 tokens of context at <strong>73 % wired</strong>, and returns
+      <strong>6/6 with zero schema errors in 39 tool calls</strong> — the second model here to match
+      gpt-oss's perfect score, and more consistently: 5 to 7 steps every run, where gpt-oss ranged from
+      5 to 10.</p>
+      <p>It is also <strong>four times slower</strong>: a 212 s median against 55 s, for an identical
+      result. That gap is architectural. gpt-oss is a mixture-of-experts and activates a fraction of its
+      parameters per token; a dense 27B computes all of them. The
+      <a href="https://github.com/DG1001/local-agentic-coding-128gb">128 GB companion study</a> measured
+      the same shape on entirely different hardware — a dense 27B there scored a perfect 86/86 and needed
+      3 h 07 m at 4.5 tok/s, against minutes for MoE models of comparable quality. <strong>Pick by active
+      parameters, not total parameters</strong>, and the rule holds at both ends of the memory range.</p>
+      <p>Two notes specific to this model. Unsloth's "runs well on a 24 GB Mac" applies to
+      <code>UD-IQ4_XS</code> and below — <code>UD-Q4_K_M</code> (16.46 GB) and the MLX 4-bit build
+      (16.05 GB) project to 83–88 %, the same band in which the guardrail refused Qwen3.6-27B outright.
+      And <code>lms load</code> defaults <code>PARALLEL</code> to <strong>4</strong>: without an explicit
+      <code>--parallel 1</code> the 1.07 GB KV cache is held four times over, and the same configuration
+      lands at 88 % instead of 73 %.</p>
     </div>
   </section>
 
@@ -1286,6 +1307,8 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
           <tr><th>gpt-oss-20b MXFP4-Q8</th><td class="num">12.08 GB</td><td class="num">16.11 GB <em>meas.</em></td><td class="num">67 %</td><td><span class="pill ok">recommended</span></td></tr>
           <tr><th>Devstral-Small-2507 4-bit</th><td class="num">13.26 GB</td><td class="num">~17.5 GB</td><td class="num">73 %</td><td><span class="pill mid">check its KV first</span></td></tr>
           <tr><th>Devstral-Small-2-24B MXFP4</th><td class="num">14.39 GB</td><td class="num">16.25 GB <em>meas.</em></td><td class="num">68 %</td><td><span class="pill bad">4,864 ctx ceiling</span></td></tr>
+          <tr><th>Qwen3.8-27B UD-IQ4_XS <em>gguf</em></th><td class="num">14.25 GB</td><td class="num">17.42 GB <em>meas.</em></td><td class="num">73 %</td><td><span class="pill ok">6/6, but 4x slower</span></td></tr>
+          <tr><th>Qwen3.8-27B UD-Q4_K_M <em>gguf</em></th><td class="num">16.46 GB</td><td class="num">~20 GB</td><td class="num">83 %</td><td><span class="pill bad">same band as the guardrail block</span></td></tr>
           <tr><th>Devstral-Small-2-24B 4-bit</th><td class="num">15.10 GB</td><td class="num">—</td><td class="num">—</td><td><span class="pill bad">worse ceiling</span></td></tr>
           <tr><th>Qwen3.6-35B-A3B 3-bit</th><td class="num">15.20 GB</td><td class="num">19.29 GB <em>meas.</em></td><td class="num">80 %</td><td><span class="pill bad">3/6 under load</span></td></tr>
           <tr><th>Qwen3.6-27B 4-bit</th><td class="num">16.08 GB</td><td class="num">~20 GB</td><td class="num">83 %</td><td><span class="pill bad">guardrail blocks</span></td></tr>
