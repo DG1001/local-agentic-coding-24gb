@@ -47,6 +47,14 @@ Devstral's context at 4,864, refused to load Qwen3.6-27B at all, and broke on Ge
 channel format. Nanbeige4.2-3B fails on *both* of LM Studio's engines — only an upstream
 llama.cpp build runs it. The engine version matters, not just the engine.
 
+**Six tools are free; seventeen are not.** The same repair task through OpenCode's six
+live tools took 201 s — against 212 s median through a two-tool harness. The tool surface
+cost nothing. What did cost was one config number: OpenCode compacts at
+`context - output`, so a generous `output` reservation silently halves your working
+context. With `output: 8192` on a 16k context the same run compacted four times, threw
+two tool errors and limped to completion; with `output: 4096` on 24k it finished in one
+pass with zero compactions.
+
 **And if you are running a general-purpose agent, cut its toolset — and budget for a
 larger model.** Hermes Agent with its 17 default toolsets could not finish this task with
 any model tested; the same gpt-oss that scores 6/6 through a two-tool harness left the
@@ -74,6 +82,8 @@ failure and was not.
 | `panic ... @IOGPUGroupMemory.cpp` after a long agent session | Unresolved Apple IOGPU defect, triggered by unbounded KV growth | Finding 10 |
 | `opencode run` hangs, or exits instantly with code 0 and an empty log | `permission` defaults to `ask`; without a TTY it gets EOF | Finding 12 |
 | Agent rambles instead of calling tools | Sampling (`temp 0.3` without `top_k`/`top_p`) on a fragile model, or too many tools offered | Findings 3, 7 |
+| OpenCode compacts constantly, `edit` then fails with "Could not find oldString" | Its compaction threshold is `context - output`; a large `output` reservation eats the working context | Finding 13 |
+| `cache.read` / `cache.write` always 0 against LM Studio | Reporting gap, not absent caching — watch prompt throughput instead | Finding 13 |
 | `lms get` reports success but nothing downloaded | It returns exit code 0 on failure — check file sizes | Finding 12 |
 | `hf download` aborts instantly, target directory stays at 4 KB | `HF_HUB_ENABLE_HF_TRANSFER=1` set but `hf_transfer` not installed | Finding 12 |
 | Wired memory far higher than weights + KV | LM Studio's `PARALLEL` holds the KV cache per slot — use `--parallel 1` | Finding 7 |
@@ -216,9 +226,9 @@ enough to tell 5/6 from 6/6. Treat single-run differences as noise.
 The repair task is real but small — one module, three bugs, a test suite that runs in
 milliseconds. It says nothing about a refactor spanning twenty files.
 
-The report contains a section listing eleven conclusions that had to be retracted during
+The report contains a section listing thirteen conclusions that had to be retracted during
 the investigation. It is there because the pattern transfers better than the individual
-results: five of the eleven were tooling behaviour mistaken for model behaviour.
+results: seven of the thirteen were tooling behaviour mistaken for model behaviour.
 
 ## Licence
 

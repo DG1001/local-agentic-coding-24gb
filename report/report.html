@@ -400,7 +400,7 @@
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
-    macOS ever gave, and eleven confident conclusions I had to retract.</p>
+    macOS ever gave, and thirteen confident conclusions I had to retract.</p>
 
     <div class="factstrip">
       <div>Machine<b>Apple M5 Pro · 15 cores</b></div>
@@ -1291,6 +1291,66 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
     </div>
   </section>
 
+  <section id="toolsurface2">
+    <div class="col">
+      <h2><span class="num">Finding 13</span>Six tools cost nothing. The context split cost everything.</h2>
+      <p>Finding 7 leaves an obvious hole: every model number here comes from a two-tool harness, while a
+      real agent offers more. So the same repair task was run through <strong>OpenCode 1.18.15</strong>
+      with six tools live — <code>bash, edit, glob, grep, read, write</code> — against Qwen3.8-27B.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Same model, same task, same machine — only the agent differs</caption>
+        <thead><tr><th></th><th class="num">Harness, 2 tools</th><th class="num">OpenCode, 6 tools</th></tr></thead>
+        <tbody>
+          <tr><th>Wall-clock</th><td class="num">212 s median</td><td class="num"><strong>201 s</strong></td></tr>
+          <tr><th>Tool calls</th><td class="num">6 median</td><td class="num">6</td></tr>
+          <tr><th>Tool errors</th><td class="num">0</td><td class="num">0</td></tr>
+          <tr><th>Result</th><td class="num">22 / 22</td><td class="num">22 / 22</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>At six tools the tool surface is free.</strong> Seventeen toolsets broke every model
+      tested; six cost nothing measurable. The threshold sits somewhere in between, and it is not the
+      gentle slope the Hermes result suggested.</p>
+      <p>The first attempt looked like a catastrophe: four automatic compactions, an <code>edit</code>
+      failing with <em>"Could not find oldString in the file"</em>, a <code>read</code> aborting, the task
+      limping to completion across eleven hours. The cause was one number in my own config. OpenCode
+      decides when to compact like this:</p>
+    </div>
+
+<pre><code>Math.max(0, limit.context - maxOutputTokens(model, outputTokenMax))</code></pre>
+
+    <div class="col">
+      <p><strong><code>output</code> is not a cap on the answer. It is subtracted from the working
+      context.</strong> With <code>context: 16384, output: 8192</code> the compaction threshold is
+      <strong>8,192 tokens</strong> — and OpenCode's own system prompt is 5,199 of them. The model had
+      roughly three thousand tokens of room before its history was folded up. The failing
+      <code>edit</code> follows directly: after compaction it no longer knew the file's current state.</p>
+      <p>Changed to <code>context: 24576, output: 4096</code>, the threshold becomes 20,480, the prompt
+      grows 5,199 → 9,160 across the run, and <strong>nothing compacts at all</strong>.</p>
+    </div>
+
+<pre><code>16:06:47   72.8 s   prompt  5199    71 prompt-tok/s   &lt;- cold
+16:07:59   64.1 s   prompt  7544   118
+16:09:03   18.4 s   prompt  8200   445
+16:09:22   14.6 s   prompt  8421   577
+16:09:37   14.5 s   prompt  8656   599
+16:09:51   16.3 s   prompt  9160   562</code></pre>
+
+    <div class="col">
+      <p>The first call costs 72.8 s, every later one 14–18 s. Prompt throughput rises eightfold because
+      llama.cpp reuses the KV prefix — <strong>even though <code>cache.read</code> and
+      <code>cache.write</code> are reported as 0 in every single message</strong>. LM Studio does not
+      report prefix reuse over the OpenAI-compatible API. Do not conclude from those zeroes that caching
+      is off, and do not judge a dense model's latency by its first request.</p>
+      <p>Wired peaked at 17.99 GB (75 %), against 17.82 GB predicted by <code>tools/kvcalc.py</code>.</p>
+    </div>
+  </section>
+
   <section id="sizing">
     <div class="col">
       <h2><span class="num">Reference</span>Sizing candidates for 24 GB</h2>
@@ -1427,6 +1487,24 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
         </div>
       </div>
       <div class="entry">
+        <div class="stamp">14:20</div>
+        <div class="col">
+          <h4>"The user had to nudge it four times"</h4>
+          <p>The "Continue if you have next steps…" messages are OpenCode's own, emitted with
+          <code>synthetic: true</code> and <code>compaction_continue: true</code>. I read them as human
+          intervention and concluded the model could not work autonomously. It could — it was being
+          interrupted by compaction.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">14:35</div>
+        <div class="col">
+          <h4>"There is no prefix caching — <code>cache.read</code> is 0"</h4>
+          <p>A reporting gap, not an absence. Prompt throughput rises from 71 to 599 tok/s over six
+          calls; llama.cpp reuses the prefix and LM Studio simply does not say so.</p>
+        </div>
+      </div>
+      <div class="entry">
         <div class="stamp">20:10</div>
         <div class="col">
           <h4>"The degenerate state is always terminal"</h4>
@@ -1438,13 +1516,13 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
 
     <div class="col">
       <h3>The pattern</h3>
-      <p>Three of these were my own tooling misread as model behaviour: backgrounding
+      <p>Seven of these were my own tooling misread as model behaviour: backgrounding
       <code>opencode run</code> (EOF on stdin, instant exit 0), the permission prompt (silent hang), and
       the verification logic (correct code scored as failure). Each looked exactly like the model failing.</p>
       <p>With a harness you wrote yourself, the first hypothesis for a surprising result should be the
       harness — not the model. I reached for the model every time, because that was the interesting
       answer.</p>
-      <p>The other three share a different shape: I measured one model, found a real effect, and stated it
+      <p>The others share a different shape: I measured one model, found a real effect, and stated it
       as a general principle. The control experiment that would have caught all three — run the same
       broken configuration against a second model — took eleven minutes when I finally did it.</p>
     </div>

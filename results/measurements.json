@@ -791,5 +791,92 @@
     },
     "conclusion": "Reducing the tool surface fixed gpt-oss (17 toolsets: failed; 2 toolsets: 22/22 in 2:28) but not Qwen3.5-9B, which failed either way. So tool width explains the 21B model's behaviour, not the 9B's. The same model solves this task 5/6 through a two-tool custom harness with terse schemas - Hermes' terminal+file toolsets still carry more functions and a much larger system prompt. For a local general-purpose agent on 24 GB the entry ticket is a 21B-class model at ~67 % memory, not the 39 % a 9B would have cost.",
     "caveat": "One run per configuration, not six. Enough to show the direction, not to quantify it. The gpt-oss contrast (fails at 17 toolsets, 22/22 at 2) is large enough that the direction is not in doubt; the Qwen3.5-9B result is a single failed run and should be read as such."
+  },
+  "opencode_through_the_real_tool_surface": {
+    "_comment": "Qwen3.8-27B driven by OpenCode 1.18.15 (6 tools) instead of the 2-tool harness. Same repair task. Two runs, differing only in the context/output split of the model config.",
+    "tools_offered": [
+      "bash",
+      "edit",
+      "glob",
+      "grep",
+      "read",
+      "write"
+    ],
+    "tools_disabled": [
+      "question",
+      "skill",
+      "task",
+      "todowrite",
+      "webfetch"
+    ],
+    "compaction_rule": "OpenCode compacts when total tokens >= limit.context - limit.output. 'output' is not an answer cap, it is subtracted from the working context.",
+    "run_broken_split": {
+      "limit": {
+        "context": 16384,
+        "output": 4096
+      },
+      "_note": "config was context 16384 / output 8192 -> threshold 8192",
+      "threshold_tokens": 8192,
+      "compactions": 4,
+      "tool_calls": 11,
+      "tool_errors": 2,
+      "errors": [
+        "edit: Could not find oldString in the file",
+        "read: Tool execution aborted"
+      ],
+      "result": "22/22 eventually, tests untouched, but only after four automatic compaction-continues spread over 11 h wall-clock (machine slept in between)",
+      "clean_window_s": 404,
+      "clean_window_note": "01:48:15 to idle sleep at 01:55:46; five assistant turns, five tool calls, task not finished"
+    },
+    "run_correct_split": {
+      "limit": {
+        "context": 24576,
+        "output": 4096
+      },
+      "threshold_tokens": 20480,
+      "compactions": 0,
+      "tool_calls": 6,
+      "tool_errors": 0,
+      "wall_s": 201,
+      "assistant_turns": 6,
+      "tokens": {
+        "output": 852,
+        "reasoning": 646
+      },
+      "prompt_growth": [
+        5199,
+        7544,
+        8200,
+        8421,
+        8656,
+        9160
+      ],
+      "wired_peak_gb": 17.99,
+      "wired_pct": 75,
+      "all_green": true,
+      "tests_untouched": true,
+      "per_step_s": [
+        72.8,
+        64.1,
+        18.4,
+        14.6,
+        14.5,
+        16.3
+      ],
+      "prompt_throughput_tok_s": [
+        71,
+        118,
+        445,
+        577,
+        599,
+        562
+      ],
+      "cache_reported": "cache.read and cache.write are 0 in every message; the 8x rise in prompt throughput shows llama.cpp reuses the prefix anyway. LM Studio does not report it."
+    },
+    "comparison": {
+      "harness_2_tools_median_s": 212,
+      "opencode_6_tools_s": 201,
+      "conclusion": "At six tools the tool surface costs nothing measurable. Contrast Hermes Agent at 17 toolsets, where no model finished."
+    }
   }
 }

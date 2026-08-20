@@ -65,11 +65,11 @@
           }
         },
         "qwen3.8-27b": {
-          "name": "Qwen3.8-27B (GGUF UD-IQ4_XS) - 6/6 on the repair task, ~4x slower than gpt-oss",
+          "name": "Qwen3.8-27B (GGUF UD-IQ4_XS) - context minus output is OpenCode's compaction threshold",
           "tool_call": true,
           "limit": {
-            "context": 16384,
-            "output": 8192
+            "context": 24576,
+            "output": 4096
           },
           "options": {
             "temperature": 0.6,

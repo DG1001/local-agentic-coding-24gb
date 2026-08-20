@@ -5,7 +5,7 @@
 Eight models, 302 tool calls, six identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
-desktop as the only warning macOS ever gave, and eleven confident conclusions I had to
+desktop as the only warning macOS ever gave, and thirteen confident conclusions I had to
 retract.
 
 > The formatted version with an interactive chart is in [`report.html`](report.html).
@@ -432,6 +432,10 @@ model buys you holds for a coding agent like OpenCode — not for this.
 While setting this up I raised gpt-oss to 65,536 context because Hermes asks for at least
 64K — and the desktop started flickering again. Wired had reached **18.75 GB (78 %)**.
 
+**But six tools are not seventeen.** Finding 13 runs the same task through OpenCode's
+six live tools and finds no penalty at all — so read this finding as being about
+*seventeen*, not about "more than two".
+
 LM Studio defaults to `PARALLEL 4`, and it holds the KV cache **per slot**. What should
 have been 1.57 GB of cache became up to 6.3 GB. With `--parallel 1` the identical context
 peaked at 17.47 GB (73 %) and ran fine. For a single agent, one slot is all you need — and
@@ -632,9 +636,66 @@ completions reached 2,361.
 
 ---
 
+## Finding 13 — Six tools cost nothing. The context split cost everything.
+
+Finding 7 leaves an obvious hole: all the model numbers above come from a two-tool
+harness, while a real agent offers more. So the same repair task was run through
+**OpenCode 1.18.15** with six tools live — `bash, edit, glob, grep, read, write` — against
+Qwen3.8-27B. The result is not what Finding 7 predicts.
+
+| | Harness, 2 tools | OpenCode, 6 tools |
+|---|---:|---:|
+| Wall-clock | 212 s median | **201 s** |
+| Tool calls | 6 median | 6 |
+| Tool errors | 0 | 0 |
+| Result | 22/22 | 22/22 |
+
+**At six tools the tool surface is free.** Seventeen toolsets broke every model tested;
+six cost nothing measurable. The threshold sits somewhere in between, and it is not the
+gentle slope the Hermes result suggested.
+
+But the first attempt at this run looked like a catastrophe: four automatic compactions,
+an `edit` failing with *"Could not find oldString in the file"*, a `read` aborting, and
+the task limping to completion across eleven hours. The cause was one number in my own
+config. OpenCode decides when to compact like this:
+
+```js
+Math.max(0, limit.context - maxOutputTokens(model, outputTokenMax))
+```
+
+**`output` is not a cap on the answer. It is subtracted from the working context.** With
+`context: 16384, output: 8192` the compaction threshold is **8,192 tokens** — and
+OpenCode's own system prompt is 5,199 of them. The model had roughly three thousand
+tokens of room before its history was folded up. The failing `edit` follows directly:
+after compaction it no longer knew the file's current state.
+
+Changed to `context: 24576, output: 4096`, the threshold becomes 20,480, the prompt grows
+5,199 → 9,160 across the run, and **nothing compacts at all**.
+
+Worth knowing when reading the per-step timings:
+
+```
+16:06:47   72.8 s   prompt  5199    71 prompt-tok/s   <- cold
+16:07:59   64.1 s   prompt  7544   118
+16:09:03   18.4 s   prompt  8200   445
+16:09:22   14.6 s   prompt  8421   577
+16:09:37   14.5 s   prompt  8656   599
+16:09:51   16.3 s   prompt  9160   562
+```
+
+The first call costs 72.8 s, every later one 14–18 s. Prompt throughput rises eightfold
+because llama.cpp reuses the KV prefix — **even though `cache.read` and `cache.write` are
+reported as 0 in every single message**. LM Studio does not report prefix reuse over the
+OpenAI-compatible API. Do not conclude from those zeroes that caching is off, and do not
+judge a dense model's latency by its first request.
+
+Wired peaked at 17.99 GB (75 %), against 17.82 GB predicted by `tools/kvcalc.py`.
+
+---
+
 ## Corrections
 
-Eleven conclusions had to be retracted. They are here because the pattern transfers better
+Thirteen conclusions had to be retracted. They are here because the pattern transfers better
 than the individual cases: a real symptom, a plausible cause, no control experiment.
 
 | Time | Claim | What was actually true |
@@ -650,8 +711,10 @@ than the individual cases: a real symptom, a plausible cause, no control experim
 | 19:15 | "GGUF is unbearably slow" | three timeouts caused by my own 24,000-token prompt |
 | 20:06 | "807 seconds of reasoning on one request" *(published)* | a cumulative counter. It later read 36,646 s — the server's uptime |
 | 17:12 | "Gemma 4 refuses to call `write`" | an LM Studio MLX channel-format defect. Under GGUF it calls `write` and scores 5/6 |
+| 14:20 | "the user had to nudge it four times" | the "Continue if…" messages are OpenCode's own, flagged `synthetic: true, compaction_continue: true`. The run *was* autonomous |
+| 14:35 | "there is no prefix caching — `cache.read` is 0" | a reporting gap. Prompt throughput rises 71 → 599 tok/s across the run; llama.cpp reuses the prefix, LM Studio just does not say so |
 
-**The pattern.** Five of the eleven were tooling behaviour mistaken for model behaviour:
+**The pattern.** Seven of the thirteen were tooling behaviour mistaken for model behaviour:
 backgrounding `opencode run` (EOF on stdin, instant exit 0), the permission prompt (silent
 hang), my verification logic (correct code scored as failure), Devstral's context cap, and
 Gemma's channel markers. Every one looked exactly like a model failing.
@@ -678,6 +741,8 @@ configuration against a second model — took eleven minutes when I finally ran 
 - Whether large tool-call arguments drive the schema-failure risk. One occurrence in 202
   is a hypothesis, not a result.
 - Why `opencode run` hangs before session creation while the TUI works.
+- Where between six and seventeen tools the agent surface starts to cost something.
+  Six is free on a 27B; seventeen breaks everything. The curve in between is unmeasured.
 
 ---
 
