@@ -47,13 +47,16 @@ Devstral's context at 4,864, refused to load Qwen3.6-27B at all, and broke on Ge
 channel format. Nanbeige4.2-3B fails on *both* of LM Studio's engines — only an upstream
 llama.cpp build runs it. The engine version matters, not just the engine.
 
-**Six tools are free; seventeen are not.** The same repair task through OpenCode's six
-live tools took 201 s — against 212 s median through a two-tool harness. The tool surface
-cost nothing. What did cost was one config number: OpenCode compacts at
-`context - output`, so a generous `output` reservation silently halves your working
-context. With `output: 8192` on a 16k context the same run compacted four times, threw
-two tool errors and limped to completion; with `output: 4096` on 24k it finished in one
-pass with zero compactions.
+**The tool count is not the cost — the turn count is.** The same repair task, same model,
+three harnesses: 2 tools → 212 s, 6 tools → 201 s, 7 tools → 237 s. Noise, not a trend.
+The last of those ([jaja](https://github.com/DG1001/jaja)) has a system prompt **35×
+shorter** than OpenCode's and still came last, because it took ten turns instead of six
+and every turn resends the whole history through all 27B parameters.
+
+**What did cost was one config number.** OpenCode compacts at `context - output`, so a
+generous `output` reservation silently halves your working context. With `output: 8192`
+on a 16k context the same run compacted four times, threw two tool errors and limped to
+completion; with `output: 4096` on 24k it finished in one pass with zero compactions.
 
 **And if you are running a general-purpose agent, cut its toolset — and budget for a
 larger model.** Hermes Agent with its 17 default toolsets could not finish this task with
@@ -92,7 +95,7 @@ failure and was not.
 **Models measured here:** gpt-oss-20b · Qwen3.5-9B · Qwen3.8-27B · Qwen3.6-35B-A3B · Qwen3.6-27B ·
 Devstral-Small-2-24B · Gemma 4 12B · Gemma 4 26B-A4B · Nanbeige4.2-3B
 **Runtimes:** MLX · llama.cpp · TurboFieldfare (SSD expert streaming)
-**Harnesses:** OpenCode · Hermes Agent · a purpose-built 180-line Python loop
+**Harnesses:** OpenCode · Hermes Agent · [jaja](https://github.com/DG1001/jaja) · a purpose-built 180-line Python loop
 **Hardware:** Apple M5 Pro, 24 GB unified memory, macOS 26.6
 
 ## `tools/kvcalc.py` — will it fit?

@@ -876,7 +876,52 @@
     "comparison": {
       "harness_2_tools_median_s": 212,
       "opencode_6_tools_s": 201,
-      "conclusion": "At six tools the tool surface costs nothing measurable. Contrast Hermes Agent at 17 toolsets, where no model finished."
+      "jaja_7_tools_s": 237,
+      "conclusion": "Two, six and seven tools give 212 / 201 / 237 s - noise, not a trend. The tool surface is not the cost driver below double digits; turn count is, because every turn resends the full context through a dense 27B. Contrast Hermes Agent at 17 toolsets, where no model finished."
+    },
+    "jaja_0_1_0": {
+      "_comment": "Third harness on the identical repair task and model: https://github.com/DG1001/jaja - Java 21, no dependencies.",
+      "tools_offered": [
+        "bash",
+        "edit",
+        "glob",
+        "grep",
+        "karte",
+        "read",
+        "write"
+      ],
+      "system_prompt_tokens_approx": 150,
+      "limits": {
+        "context_window": 24576,
+        "max_output": 4096,
+        "usable_input": 18480,
+        "truncation_threshold": 12936,
+        "formula": "fenster - maxAusgabe - reserve(2000); truncate at 70% of that"
+      },
+      "wall_s": 237,
+      "turns": 10,
+      "tool_calls": 11,
+      "tokens": {
+        "input_total": 50147,
+        "output_total": 2461
+      },
+      "peak_context_tokens": 7178,
+      "all_green": true,
+      "tests_untouched": true,
+      "tool_sequence": [
+        "bash",
+        "read",
+        "read",
+        "bash",
+        "edit",
+        "edit",
+        "edit",
+        "bash",
+        "read",
+        "edit",
+        "bash"
+      ],
+      "note": "Slower than OpenCode despite a system prompt ~35x shorter. Ten turns instead of six; each turn resends the whole history. Turn count beats prompt size."
     }
   }
 }

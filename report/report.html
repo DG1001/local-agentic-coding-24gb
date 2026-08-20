@@ -1293,7 +1293,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
 
   <section id="toolsurface2">
     <div class="col">
-      <h2><span class="num">Finding 13</span>Six tools cost nothing. The context split cost everything.</h2>
+      <h2><span class="num">Finding 13</span>The tool count is not the cost. The turn count is.</h2>
       <p>Finding 7 leaves an obvious hole: every model number here comes from a two-tool harness, while a
       real agent offers more. So the same repair task was run through <strong>OpenCode 1.18.15</strong>
       with six tools live — <code>bash, edit, glob, grep, read, write</code> — against Qwen3.8-27B.</p>
@@ -1302,21 +1302,43 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
     <div class="tablewrap">
       <table>
         <caption>Same model, same task, same machine — only the agent differs</caption>
-        <thead><tr><th></th><th class="num">Harness, 2 tools</th><th class="num">OpenCode, 6 tools</th></tr></thead>
+        <thead><tr><th></th><th class="num">Harness, 2 tools</th><th class="num">OpenCode, 6 tools</th><th class="num">jaja, 7 tools</th></tr></thead>
         <tbody>
-          <tr><th>Wall-clock</th><td class="num">212 s median</td><td class="num"><strong>201 s</strong></td></tr>
-          <tr><th>Tool calls</th><td class="num">6 median</td><td class="num">6</td></tr>
-          <tr><th>Tool errors</th><td class="num">0</td><td class="num">0</td></tr>
-          <tr><th>Result</th><td class="num">22 / 22</td><td class="num">22 / 22</td></tr>
+          <tr><th>System prompt</th><td class="num">~5,600 tok</td><td class="num">5,199 tok</td><td class="num"><strong>~150 tok</strong></td></tr>
+          <tr><th>Wall-clock</th><td class="num">212 s median</td><td class="num"><strong>201 s</strong></td><td class="num">237 s</td></tr>
+          <tr><th>Turns</th><td class="num">5–7</td><td class="num">6</td><td class="num">10</td></tr>
+          <tr><th>Tool calls</th><td class="num">6</td><td class="num">6</td><td class="num">11</td></tr>
+          <tr><th>Tool errors</th><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><th>Result</th><td class="num">22 / 22</td><td class="num">22 / 22</td><td class="num">22 / 22</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="col">
-      <p><strong>At six tools the tool surface is free.</strong> Seventeen toolsets broke every model
-      tested; six cost nothing measurable. The threshold sits somewhere in between, and it is not the
-      gentle slope the Hermes result suggested.</p>
-      <p>The first attempt looked like a catastrophe: four automatic compactions, an <code>edit</code>
+      <p><strong>Two, six and seven tools give 212, 201 and 237 seconds.</strong> That is noise, not a
+      trend. Seventeen toolsets broke every model tested; seven cost nothing measurable. Whatever breaks
+      at seventeen is not a gentle slope starting at three.</p>
+      <p>The third harness is the one that settles it. <a href="https://github.com/DG1001/jaja">jaja</a>
+      offers <em>more</em> tools than OpenCode and a system prompt <strong>thirty-five times
+      shorter</strong> — a few lines of German against 5,199 tokens. It should have won on prefill
+      alone. It came last, and its own output says why:</p>
+
+<pre><code>Token: 50147 Eingabe, 2461 Ausgabe</code></pre>
+
+    <div class="col">
+      <p><strong>50,147 input tokens for eleven tool calls.</strong> The short prompt saves a few
+      thousand tokens per turn, but jaja takes ten turns where OpenCode takes six, and every turn resends
+      the entire history. <strong>Turn count beats prompt size.</strong> The extra turns are visible in
+      the trace and they are not mistakes — it reads the two files separately, verifies with
+      <code>diff</code> that the test file is untouched, splits three edits across two turns, and
+      re-reads after the first test run. More careful, and more expensive.</p>
+      <p>For a dense model this is the number that matters. Every turn pushes the whole context through
+      all 27B parameters again. A harness that reaches the same answer in six turns instead of ten is
+      40 % cheaper before a single token of its system prompt is counted.</p>
+    </div>
+
+    <div class="col">
+      <p>One config number nearly hid all of this. The first OpenCode attempt looked like a catastrophe: four automatic compactions, an <code>edit</code>
       failing with <em>"Could not find oldString in the file"</em>, a <code>read</code> aborting, the task
       limping to completion across eleven hours. The cause was one number in my own config. OpenCode
       decides when to compact like this:</p>

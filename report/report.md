@@ -432,9 +432,9 @@ model buys you holds for a coding agent like OpenCode — not for this.
 While setting this up I raised gpt-oss to 65,536 context because Hermes asks for at least
 64K — and the desktop started flickering again. Wired had reached **18.75 GB (78 %)**.
 
-**But six tools are not seventeen.** Finding 13 runs the same task through OpenCode's
-six live tools and finds no penalty at all — so read this finding as being about
-*seventeen*, not about "more than two".
+**But seven tools are not seventeen.** Finding 13 runs the same task through three
+harnesses at two, six and seven tools and finds no penalty at any of them — so read this
+finding as being about *seventeen*, not about "more than two".
 
 LM Studio defaults to `PARALLEL 4`, and it holds the KV cache **per slot**. What should
 have been 1.57 GB of cache became up to 6.3 GB. With `--parallel 1` the identical context
@@ -636,23 +636,44 @@ completions reached 2,361.
 
 ---
 
-## Finding 13 — Six tools cost nothing. The context split cost everything.
+## Finding 13 — The tool count is not the cost. The turn count is.
 
 Finding 7 leaves an obvious hole: all the model numbers above come from a two-tool
 harness, while a real agent offers more. So the same repair task was run through
 **OpenCode 1.18.15** with six tools live — `bash, edit, glob, grep, read, write` — against
 Qwen3.8-27B. The result is not what Finding 7 predicts.
 
-| | Harness, 2 tools | OpenCode, 6 tools |
-|---|---:|---:|
-| Wall-clock | 212 s median | **201 s** |
-| Tool calls | 6 median | 6 |
-| Tool errors | 0 | 0 |
-| Result | 22/22 | 22/22 |
+| | Harness, 2 tools | OpenCode, 6 tools | [jaja](https://github.com/DG1001/jaja), 7 tools |
+|---|---:|---:|---:|
+| System prompt | ~5,600 tok | 5,199 tok | **~150 tok** |
+| Wall-clock | 212 s median | **201 s** | 237 s |
+| Turns | 5–7 | 6 | 10 |
+| Tool calls | 6 | 6 | 11 |
+| Tool errors | 0 | 0 | 0 |
+| Result | 22/22 | 22/22 | 22/22 |
 
-**At six tools the tool surface is free.** Seventeen toolsets broke every model tested;
-six cost nothing measurable. The threshold sits somewhere in between, and it is not the
-gentle slope the Hermes result suggested.
+**Two, six and seven tools give 212, 201 and 237 seconds.** That is noise, not a trend.
+Seventeen toolsets broke every model tested; seven cost nothing measurable. Whatever
+breaks at seventeen is not a gentle slope starting at three.
+
+The third harness is the one that settles it. `jaja` offers *more* tools than OpenCode and
+a system prompt **thirty-five times shorter** — a few lines of German against 5,199
+tokens. It should have won on prefill alone. It came last, and its own output says why:
+
+```
+Token: 50147 Eingabe, 2461 Ausgabe
+```
+
+**50,147 input tokens for eleven tool calls.** The short prompt saves a few thousand
+tokens per turn, but jaja takes ten turns where OpenCode takes six, and every turn resends
+the entire history. **Turn count beats prompt size.** The extra turns are visible in the
+trace and they are not mistakes — it reads the two files separately, verifies with `diff`
+that the test file is untouched, splits three edits across two turns, and re-reads after
+the first test run. More careful, and more expensive.
+
+For a dense model this is the number that matters. Every turn pushes the whole context
+through all 27B parameters again. A harness that reaches the same answer in six turns
+instead of ten is 40 % cheaper before a single token of its system prompt is counted.
 
 But the first attempt at this run looked like a catastrophe: four automatic compactions,
 an `edit` failing with *"Could not find oldString in the file"*, a `read` aborting, and
@@ -741,8 +762,10 @@ configuration against a second model — took eleven minutes when I finally ran 
 - Whether large tool-call arguments drive the schema-failure risk. One occurrence in 202
   is a hypothesis, not a result.
 - Why `opencode run` hangs before session creation while the TUI works.
-- Where between six and seventeen tools the agent surface starts to cost something.
-  Six is free on a 27B; seventeen breaks everything. The curve in between is unmeasured.
+- Where between seven and seventeen tools the agent surface starts to cost something.
+  Seven is free on a 27B; seventeen breaks everything. The curve in between is unmeasured.
+- Whether turn count is reducible by prompting. jaja's extra four turns look like caution,
+  not confusion — but nobody measured whether telling it to batch edits would help.
 
 ---
 
