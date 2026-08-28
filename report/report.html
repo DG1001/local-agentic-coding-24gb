@@ -396,11 +396,11 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Eight models, 302 tool calls, six identical runs per configuration. Every model
+    <p class="standfirst">Eight models, 350 tool calls, six identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
-    macOS ever gave, and thirteen confident conclusions I had to retract.</p>
+    macOS ever gave, and fourteen confident conclusions I had to retract.</p>
 
     <div class="factstrip">
       <div>Machine<b>Apple M5 Pro · 15 cores</b></div>
@@ -574,7 +574,8 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
           <tr><th>Gemma 4 12B Q4_K_M</th><td>llama.cpp</td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">156 s</td><td class="num">0 / 30</td><td class="num">12.3 GB · 51 %</td></tr>
           <tr><th>Nanbeige4.2-3B Q4_K_M</th><td>llama.cpp <em>(upstream only)</em></td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">62 s</td><td class="num">0 / 42</td><td class="num">11.3 GB · 47 %</td></tr>
           <tr><th>Devstral-Small-2-24B IQ4_XS</th><td>llama.cpp</td><td class="num"><span class="pill ok">2 / 2</span></td><td class="num">132 s</td><td class="num">0 / 12</td><td class="num">—</td></tr>
-          <tr><th>Qwen3.6-35B-A3B 3-bit</th><td>MLX</td><td class="num"><span class="pill mid">3 / 4</span></td><td class="num">177 s</td><td class="num">0 / 31</td><td class="num"><strong>20.2 GB · 84 %</strong></td></tr>
+          <tr><th><strong>Qwen3.6-35B-A3B 3-bit, no thinking</strong></th><td>mlx_lm.server</td><td class="num"><span class="pill ok">6 / 6</span></td><td class="num"><strong>32 s</strong></td><td class="num">0 / 48</td><td class="num">17.4 GB · 73 %</td></tr>
+          <tr><th>Qwen3.6-35B-A3B 3-bit, thinking</th><td>MLX <em>(LM Studio)</em></td><td class="num"><span class="pill mid">3 / 4</span></td><td class="num">177 s</td><td class="num">0 / 31</td><td class="num"><strong>20.2 GB · 84 %</strong></td></tr>
           <tr><th>Gemma 4 12B MLX-4bit</th><td>MLX</td><td class="num"><span class="pill bad">0 / 6</span></td><td class="num">—</td><td class="num">0 / 16</td><td class="num">engine defect, see Finding 6</td></tr>
         </tbody>
       </table>
@@ -582,30 +583,60 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
 
     <div class="col">
       <p>gpt-oss wins on all three axes at once: more reliable, three times faster, and with 17
-      percentage points more memory headroom. The Qwen MoE is the slowest despite activating only 3B of
-      its 35B parameters — its failures are expensive, and its one bad run burned 8,211 reasoning tokens
-      going nowhere.</p>
+      percentage points more memory headroom. The Qwen MoE is the slowest <em>with its reasoning block</em>
+      despite activating only 3B of its 35B parameters — its failures are expensive, and its one bad run
+      burned 8,211 reasoning tokens going nowhere. Remove the reasoning block and the same weights become
+      the fastest entry in the table.</p>
       <p>Devstral is credible on quality — it never failed and never touched the tests — but llama.cpp on
       Apple Silicon costs roughly 2.4× the wall time of MLX, because it does not use the M5's neural
       accelerators.</p>
 
-      <h3>Turning off reasoning does not help</h3>
+      <h3>Turning off reasoning turns the slowest model into the fastest</h3>
+      <p class="stamp">This section previously concluded the opposite. The retraction is in Corrections.</p>
       <p>An obvious idea, since Devstral solves this task with <code>reasoning_tokens: 0</code>: disable
-      thinking on the Qwen MoE and skip the loop entirely. Measured on the same request:</p>
+      thinking on the Qwen MoE and skip the loop entirely. The first attempt did that by putting
+      <code>/no_think</code> in the user message, and the model stopped calling tools and rambled to the
+      token limit. Conclusion at the time: the reasoning is load-bearing for tool use.</p>
+      <p>That conclusion was wrong, and the template says why. <strong><code>Qwen3.6-35B-A3B</code> has no
+      <code>/no_think</code> handling at all.</strong> Its chat template branches on exactly one thing:</p>
+      <pre><code>{%- if enable_thinking is defined and enable_thinking is false %}
+    {{- '&lt;think&gt;\n\n&lt;/think&gt;\n\n' }}
+{%- else %}
+    {{- '&lt;think&gt;\n' }}
+{%- endif %}</code></pre>
+      <p><code>/no_think</code> in the message body is just a stray token in the prompt. The template still
+      opens <code>&lt;think&gt;</code> as prefill, so the model sits in thinking mode while being told not
+      to think — which is what the rambling was. Setting <code>enable_thinking: false</code> emits a
+      <em>closed, empty</em> block instead, and the model starts in ordinary output mode.</p>
+      <p>Getting that argument to the template is the whole difficulty. LM Studio discards
+      <code>chat_template_kwargs</code> without a word, and llama.cpp — which does accept
+      <code>--chat-template-kwargs</code> — cannot load MLX weights. The route that works is
+      <code>mlx_lm.server</code> (0.31.3; 0.29.1 does not know the <code>qwen3_5_moe</code> architecture):</p>
+      <pre><code>mlx_lm.server --model &lt;path&gt; --port 8890 \
+    --chat-template-args '{"enable_thinking":false}' \
+    --prompt-cache-size 1 --prompt-cache-bytes 2GB</code></pre>
+      <p>Same model, same 3-bit quant, same task, same harness — only the reasoning block removed:</p>
       <div class="tablewrap">
         <table>
-          <thead><tr><th>Mode</th><th class="num">Reasoning tok</th><th class="num">Completion tok</th><th class="num">Time</th><th>Tool call</th></tr></thead>
+          <thead><tr><th></th><th class="num">thinking on</th><th class="num">thinking off</th></tr></thead>
           <tbody>
-            <tr><td>thinking on</td><td class="num">108</td><td class="num">169</td><td class="num">4.4 s</td><td><span class="pill ok">yes</span></td></tr>
-            <tr><td><code>/no_think</code></td><td class="num">2</td><td class="num">2,047 <em>(limit)</em></td><td class="num">64.8 s</td><td><span class="pill bad">no</span></td></tr>
+            <tr><th>Verified</th><td class="num"><span class="pill mid">3 / 4</span></td><td class="num"><span class="pill ok">6 / 6</span></td></tr>
+            <tr><th>Median</th><td class="num">176.8 s</td><td class="num"><strong>32.5 s</strong></td></tr>
+            <tr><th>Range</th><td class="num">51.8–251.0 s</td><td class="num">20.5–73.0 s</td></tr>
+            <tr><th>Steps</th><td class="num">2–14</td><td class="num">6–13</td></tr>
+            <tr><th>Reasoning tokens</th><td class="num">864–8,211</td><td class="num">0</td></tr>
+            <tr><th>Schema errors</th><td class="num">0 / 31</td><td class="num">0 / 48</td></tr>
+            <tr><th>Wired peak</th><td class="num">20.2 GB · 84 %</td><td class="num">17.4 GB · 73 %</td></tr>
           </tbody>
         </table>
       </div>
-      <p>Without thinking the model stops calling tools altogether and rambles to the token limit. For
-      Qwen3.6 the reasoning is load-bearing for tool use — you cannot strip it and get a non-reasoning
-      model's behaviour. Devstral works without it because it was trained that way, not because thinking
-      is optional. (Note that <code>chat_template_kwargs: {"enable_thinking": false}</code> is silently
-      ignored by LM Studio; only the <code>/no_think</code> token in the message actually takes effect.)</p>
+      <p><strong>A factor of 5.4 on the median, and it goes from the slowest model in the set to the
+      fastest.</strong> The step count barely moved — the time was in the reasoning tokens, not in extra
+      turns. The single red run under thinking is the clearest evidence: two steps, 8,211 reasoning tokens,
+      then a token-ID-0 loop. That failure mode cannot occur without a reasoning block.</p>
+      <p>The generalisation from the first attempt — &ldquo;Qwen3.6 needs its reasoning for tool use&rdquo;
+      — was drawn from a mechanism that never disabled reasoning in the first place. What it actually
+      measured was a model given contradictory instructions.</p>
     </div>
 
     <div class="col">
@@ -628,7 +659,7 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
       <h2><span class="num">Finding 2</span>One malformed tool call in 302</h2>
       <p>The question that started this investigation was whether 3-bit quantisation was corrupting tool
       arguments. Across the whole study — six models, three prompt sizes, two sampling regimes, plus
-      the repair task — <strong>302 tool calls produced exactly one schema failure</strong>: a
+      the repair task — <strong>350 tool calls produced exactly one schema failure</strong>: a
       <code>write</code> with a completely empty arguments object. The agent recovered on the next step
       and the run still went green.</p>
       <p>The harness validated this itself rather than trusting the agent framework, declaring the JSON
@@ -1275,6 +1306,24 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
       same model and config. So if the batch runner stalls on you, that is not your model or your
       provider config. Use the TUI.</p>
 
+      <h3>mlx_lm.server</h3>
+      <ul>
+        <li><strong><code>--prompt-cache-size</code> defaults to 10 — that is ten complete KV caches held
+        at once.</strong> Every step of an agent run has a different prefix, so the server allocates a new
+        cache per step and keeps them all. Step eleven dies with <code>[METAL] Command buffer execution
+        failed: Insufficient Memory</code>. Short runs pass, long runs fail — which reads exactly like an
+        unstable model until you find it. There is <strong>no default byte ceiling</strong>; set
+        <code>--prompt-cache-size 1 --prompt-cache-bytes 2GB</code> for agent work.</li>
+        <li>After that OOM the server process stays alive and the client hangs indefinitely — a request
+        timeout never fired. Watch the server log, not the client.</li>
+        <li>It is the only one of the three runtimes that passes <code>enable_thinking</code> to the
+        template (<code>--chat-template-args</code>). LM Studio drops it; llama.cpp accepts the equivalent
+        flag but cannot load MLX weights. For an MLX reasoning model this server is the only route.</li>
+        <li>Version matters: 0.29.1 does not know the <code>qwen3_5_moe</code> architecture and refuses to
+        load. 0.31.3 does. LM Studio ships its own newer MLX engine, so a model that loads in the GUI can
+        still be unloadable by the <code>mlx_lm</code> in your <code>PATH</code>.</li>
+      </ul>
+
       <h3>HuggingFace CLI and macOS</h3>
       <ul>
         <li><strong>Never <code>SIGSTOP</code> an <code>hf download</code>.</strong> Xet CDN URLs are
@@ -1524,6 +1573,19 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
           <h4>"There is no prefix caching — <code>cache.read</code> is 0"</h4>
           <p>A reporting gap, not an absence. Prompt throughput rises from 71 to 599 tok/s over six
           calls; llama.cpp reuses the prefix and LM Studio simply does not say so.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">21:05</div>
+        <div class="col">
+          <h4>"Qwen3.6 needs its reasoning block for tool use" <em>(published)</em></h4>
+          <p>Measured by putting <code>/no_think</code> in the message and watching the model ramble to
+          the token limit without a single tool call. But <code>/no_think</code> is not in that model's
+          chat template at all — the template still opened <code>&lt;think&gt;</code> as prefill, so the
+          model was told not to think while sitting in thinking mode. With the actual switch
+          (<code>enable_thinking: false</code>, reachable only through <code>mlx_lm.server</code>) it goes
+          6/6 at a 32.5 s median against 176.8 s with thinking on. I generalised from a mechanism that
+          never did what I thought it did.</p>
         </div>
       </div>
       <div class="entry">

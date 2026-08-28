@@ -234,7 +234,74 @@
           "wall_s": 176.8,
           "green": true
         }
-      ]
+      ],
+      "_comment": "Thinking enabled -- the default, and unavoidable through LM Studio, which silently discards chat_template_kwargs. Compare with the no-thinking entry below: same model, same quant, same task.",
+      "thinking": true
+    },
+    "Qwen3.6-35B-A3B-3bit-nothink": {
+      "_comment": "Same model and quant as Qwen3.6-35B-A3B-3bit, thinking disabled. Requires mlx_lm.server --chat-template-args '{\"enable_thinking\":false}'; LM Studio drops the argument and llama.cpp cannot load MLX weights.",
+      "runtime": "MLX via mlx_lm.server 0.31.3 (not LM Studio)",
+      "thinking": false,
+      "server_flags": [
+        "--chat-template-args {\"enable_thinking\":false}",
+        "--prompt-cache-size 1",
+        "--prompt-cache-bytes 2GB"
+      ],
+      "passed": 6,
+      "of": 6,
+      "median_s": 32.5,
+      "range_s": [
+        20.5,
+        73.0
+      ],
+      "tool_calls": 48,
+      "schema_errors": 0,
+      "tests_untouched": "6/6",
+      "reasoning_tokens": 0,
+      "wired_peak_gb": 17.4,
+      "runs": [
+        {
+          "steps": 7,
+          "tool_calls": 6,
+          "wall_s": 27.2,
+          "green": true
+        },
+        {
+          "steps": 6,
+          "tool_calls": 5,
+          "wall_s": 20.5,
+          "green": true
+        },
+        {
+          "steps": 13,
+          "tool_calls": 12,
+          "wall_s": 57.3,
+          "green": true
+        },
+        {
+          "steps": 7,
+          "tool_calls": 6,
+          "wall_s": 29.9,
+          "green": true
+        },
+        {
+          "steps": 13,
+          "tool_calls": 12,
+          "wall_s": 73.0,
+          "green": true
+        },
+        {
+          "steps": 8,
+          "tool_calls": 7,
+          "wall_s": 35.2,
+          "green": true
+        }
+      ],
+      "delta_vs_thinking": {
+        "median_s": "176.8 -> 32.5",
+        "green": "3/4 -> 6/6",
+        "note": "The one red run with thinking spent 8211 reasoning tokens in two steps and ended in a token-ID-0 loop. That failure mode cannot occur without a reasoning block."
+      }
     },
     "gemma-4-26b-a4b-TurboFieldfare": {
       "runtime": "TurboFieldfare 0.3 (SSD-Streaming)",

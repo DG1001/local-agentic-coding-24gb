@@ -3,7 +3,7 @@
 Measurements and tooling for one question: which local model is actually usable for
 agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Eight models, 302 tool calls, six identical runs per configuration, measured on an Apple
+Eight models, 350 tool calls, six identical runs per configuration, measured on an Apple
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
@@ -27,9 +27,18 @@ send.
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6**, 57 s median | **39 %** |
 | Nanbeige4.2-3B Q4_K_M | **2.68 GB** | llama.cpp (upstream) | 5/6, 62 s median | 47 % |
 | Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6, 156 s median | 51 % |
-| Qwen3.6-35B-A3B 3-bit | 15.20 GB | MLX | 3/4, 177 s median | 84 % |
+| **Qwen3.6-35B-A3B 3-bit, no thinking** | 15.20 GB | mlx_lm.server | **6/6**, **32 s median** | 73 % |
+| Qwen3.6-35B-A3B 3-bit, thinking | 15.20 GB | MLX (LM Studio) | 3/4, 177 s median | 84 % |
 | Devstral-Small-2-24B | 12.76 GB | llama.cpp | 2/2, 132 s median | — |
 | Gemma 4 12B MLX-4bit | 6.74 GB | MLX | **0/6** — engine defect | — |
+
+**The fastest model in the set is the one that stops thinking.** Qwen3.6-35B-A3B is the
+same weights in both rows above. With its reasoning block it is the slowest entry and drops
+a run; without it, 6/6 at a 32 s median — 5.4× faster, and faster than anything else here.
+Reaching that switch is the hard part: LM Studio silently discards
+`chat_template_kwargs`, llama.cpp accepts the flag but cannot load MLX weights, and the
+`/no_think` token this model is often given is not in its chat template at all. Only
+`mlx_lm.server --chat-template-args '{"enable_thinking":false}'` actually gets there.
 
 **The smallest model nearly wins.** Qwen3.5-9B matches gpt-oss on speed at half the
 weights, trails it by one run on reliability, and needs 39 % of memory instead of 67 %.

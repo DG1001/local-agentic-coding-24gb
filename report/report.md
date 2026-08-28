@@ -2,7 +2,7 @@
 
 *Field notes — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Eight models, 302 tool calls, six identical runs per configuration. Every model aced the
+Eight models, 350 tool calls, six identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
 desktop as the only warning macOS ever gave, and thirteen confident conclusions I had to
@@ -107,12 +107,15 @@ The same task for the other models:
 | Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6 | 156 s | 0/30 | 12.3 GB · 51 % |
 | Devstral-Small-2-24B IQ4_XS | 12.76 GB | llama.cpp | 2/2 | 132 s | 0/12 | — |
 | Qwen3.6-35B-A3B 3-bit | 15.20 GB | MLX | 3/4 | 177 s | 0/31 | **20.2 GB · 84 %** |
+| **Qwen3.6-35B-A3B 3-bit, no thinking** | 15.20 GB | mlx_lm.server | **6/6** | **32 s** | 0/48 | 17.4 GB · 73 % |
 | Gemma 4 12B MLX-4bit | 6.74 GB | MLX | **0/6** | — | 0/16 | engine defect, see Finding 6 |
 
 ¹ Upstream llama.cpp only — LM Studio's bundled runtimes cannot load it at all. See Finding 6.
 
-The Qwen MoE is the slowest despite activating only 3B of its 35B parameters — its
-failures are expensive, and its one bad run burned 8,211 reasoning tokens going nowhere.
+The Qwen MoE is the slowest *with its reasoning block* despite activating only 3B of its
+35B parameters — its failures are expensive, and its one bad run burned 8,211 reasoning
+tokens going nowhere. Remove the reasoning block and the same weights become the fastest
+entry in the table; see below.
 
 Variance is substantial: gpt-oss run 5 finished in 4 tool calls and 556 reasoning tokens,
 run 4 needed 2,605. A factor of 4.7 on an identical task. Single runs tell you little.
@@ -122,7 +125,9 @@ The same effect appears at a larger scale in the 128 GB study, where it is named
 actual task completion differed **20×** — 1,788 s against 90 s on the same bug hunt. Model
 behaviour amplifies hardware differences. Our own numbers show the shape of it: the Qwen
 MoE was the slowest model in the set despite activating only 3B of 35B parameters, because
-its failures were expensive.
+its failures were expensive — and it became the fastest once the reasoning block was
+removed, at 5.4× the same weights' own median. The multiplier is in the behaviour, not
+the parameter count.
 
 ### A 3B model matches a 9B
 
@@ -138,23 +143,63 @@ runs 88 KB/token. At 32k that is 2.95 GB of cache against 2.68 GB of weights: **
 context costs more than the parameters.** Picking it by file size would have been a
 mistake in both directions.
 
-### Turning off reasoning does not help
+### Turning off reasoning turns the slowest model into the fastest
+
+*(This section previously concluded the opposite. The retraction is below.)*
 
 An obvious idea, since Devstral solves this task with `reasoning_tokens: 0`: disable
-thinking on the Qwen MoE and skip the loop entirely.
+thinking on the Qwen MoE and skip the loop entirely. The first attempt did that by putting
+`/no_think` in the user message, and the model stopped calling tools and rambled to the
+token limit. Conclusion at the time: the reasoning is load-bearing for tool use.
 
-| Mode | Reasoning | Completion | Time | Tool call |
-|---|---:|---:|---:|---|
-| thinking on | 108 | 169 | 4.4 s | yes |
-| `/no_think` | 2 | 2,047 *(limit)* | 64.8 s | **no** |
+That conclusion was wrong, and the template says why. **`Qwen3.6-35B-A3B` has no `/no_think`
+handling at all.** Its chat template branches on exactly one thing:
 
-Without thinking the model stops calling tools altogether and rambles to the token limit.
-For Qwen3.6 the reasoning is load-bearing for tool use — you cannot strip it and get a
-non-reasoning model's behaviour. Devstral works without it because it was trained that
-way, not because thinking is optional.
+```jinja
+{%- if enable_thinking is defined and enable_thinking is false %}
+    {{- '<think>\n\n</think>\n\n' }}
+{%- else %}
+    {{- '<think>\n' }}
+{%- endif %}
+```
 
-*(`chat_template_kwargs: {"enable_thinking": false}` is silently ignored by LM Studio;
-only the `/no_think` token in the message actually takes effect.)*
+`/no_think` in the message body is just a stray token in the prompt. The template still
+opens `<think>` as prefill, so the model sits in thinking mode while being told not to
+think — which is what the rambling was. Setting `enable_thinking: false` emits a *closed,
+empty* block instead, and the model starts in ordinary output mode.
+
+Getting that argument to the template is the whole difficulty. LM Studio discards
+`chat_template_kwargs` without a word, and llama.cpp — which does accept
+`--chat-template-kwargs` — cannot load MLX weights. The route that works is
+`mlx_lm.server` (0.31.3; 0.29.1 does not know the `qwen3_5_moe` architecture):
+
+```sh
+mlx_lm.server --model <path> --port 8890 \
+    --chat-template-args '{"enable_thinking":false}' \
+    --prompt-cache-size 1 --prompt-cache-bytes 2GB
+```
+
+Same model, same 3-bit quant, same task, same harness — only the reasoning block removed:
+
+| | thinking on | thinking off |
+|---|---:|---:|
+| Verified | 3/4 | **6/6** |
+| Median | 176.8 s | **32.5 s** |
+| Range | 51.8–251.0 s | 20.5–73.0 s |
+| Steps | 2–14 | 6–13 |
+| Reasoning tokens | 864–8,211 | 0 |
+| Schema errors | 0/31 | 0/48 |
+| Wired peak | 20.2 GB · 84 % | 17.4 GB · 73 % |
+
+**A factor of 5.4 on the median, and it goes from the slowest model in the set to the
+fastest.** The step count barely moved — the time was in the reasoning tokens, not in
+extra turns. The single red run under thinking is the clearest evidence: two steps, 8,211
+reasoning tokens, then a token-ID-0 loop. That failure mode cannot occur without a
+reasoning block.
+
+The generalisation from the first attempt — "Qwen3.6 needs its reasoning for tool use" —
+was drawn from a mechanism that never disabled reasoning in the first place. What it
+actually measured was a model given contradictory instructions.
 
 ---
 
@@ -162,7 +207,7 @@ only the `/no_think` token in the message actually takes effect.)*
 
 The question that started this investigation was whether 3-bit quantisation was
 corrupting tool arguments. Across the whole study — six models, three prompt sizes, two
-sampling regimes, plus the repair task — **302 tool calls produced exactly one schema
+sampling regimes, plus the repair task — **350 tool calls produced exactly one schema
 failure**: a `write` with a completely empty arguments object. The agent recovered on the
 next step and the run still went green.
 
@@ -619,6 +664,23 @@ completions reached 2,361.
   attempts before session creation, without a single request reaching the model server.
   Cause not found.
 
+### mlx_lm.server
+
+- **`--prompt-cache-size` defaults to 10 — that is ten complete KV caches held at once.**
+  Every step of an agent run has a different prefix, so the server allocates a new cache per
+  step and keeps them all. Step eleven dies with `[METAL] Command buffer execution failed:
+  Insufficient Memory`. Short runs pass, long runs fail — which reads exactly like an
+  unstable model until you find it. There is **no default byte ceiling**; set
+  `--prompt-cache-size 1 --prompt-cache-bytes 2GB` for agent work.
+- After that OOM the server process stays alive and the client hangs indefinitely — a
+  `REQ_TIMEOUT` on the request never fired. Watch the server log, not the client.
+- It is the only one of the three runtimes that passes `enable_thinking` to the template
+  (`--chat-template-args`). LM Studio drops it; llama.cpp accepts the equivalent flag but
+  cannot load MLX weights. For an MLX reasoning model this server is the only route.
+- Version matters: 0.29.1 does not know the `qwen3_5_moe` architecture and refuses to load.
+  0.31.3 does. LM Studio ships its own newer MLX engine, so a model that loads in the GUI
+  can still be unloadable by the `mlx_lm` in your `PATH`.
+
 ### HuggingFace CLI and macOS
 
 - **Never `SIGSTOP` an `hf download`.** Xet CDN URLs are presigned; suspending lets them
@@ -716,14 +778,14 @@ Wired peaked at 17.99 GB (75 %), against 17.82 GB predicted by `tools/kvcalc.py`
 
 ## Corrections
 
-Thirteen conclusions had to be retracted. They are here because the pattern transfers better
+Fourteen conclusions had to be retracted. They are here because the pattern transfers better
 than the individual cases: a real symptom, a plausible cause, no control experiment.
 
 | Time | Claim | What was actually true |
 |---|---|---|
 | 09:58 | "wired memory is running away" | ramp to a flat plateau, 30 MB drift. Aborted a valid measurement for nothing |
 | 10:07 | "the output budget is too small" | a direct API call returned a clean tool call in 118 tokens |
-| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 302 tool calls |
+| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 350 tool calls |
 | 10:37 | "system prompt size is irrelevant" | true only under broken sampling. With it fixed, prompt size was the strongest predictor |
 | 10:53 | "max_tokens 2048 is enough" | misread my own table: 70–210 were reasoning, not completion tokens |
 | 11:15 | "it was the sampling" *(published)* | control against gpt-oss: 6/6 with the same broken config |
@@ -734,11 +796,13 @@ than the individual cases: a real symptom, a plausible cause, no control experim
 | 17:12 | "Gemma 4 refuses to call `write`" | an LM Studio MLX channel-format defect. Under GGUF it calls `write` and scores 5/6 |
 | 14:20 | "the user had to nudge it four times" | the "Continue if…" messages are OpenCode's own, flagged `synthetic: true, compaction_continue: true`. The run *was* autonomous |
 | 14:35 | "there is no prefix caching — `cache.read` is 0" | a reporting gap. Prompt throughput rises 71 → 599 tok/s across the run; llama.cpp reuses the prefix, LM Studio just does not say so |
+| 21:05 | "Qwen3.6 needs its reasoning block for tool use" *(published)* | `/no_think` is not in that model's chat template at all. The template still opened `<think>`, so the model was told not to think while sitting in thinking mode. With `enable_thinking: false` it goes 6/6 at a 5.4× faster median |
 
-**The pattern.** Seven of the thirteen were tooling behaviour mistaken for model behaviour:
+**The pattern.** Eight of the fourteen were tooling behaviour mistaken for model behaviour:
 backgrounding `opencode run` (EOF on stdin, instant exit 0), the permission prompt (silent
-hang), my verification logic (correct code scored as failure), Devstral's context cap, and
-Gemma's channel markers. Every one looked exactly like a model failing.
+hang), my verification logic (correct code scored as failure), Devstral's context cap,
+Gemma's channel markers, and a chat template that ignored the switch I was setting. Every
+one looked exactly like a model failing.
 
 With a harness you wrote yourself, the first hypothesis for a surprising result should be
 the harness — not the model. I reached for the model every time, because that was the
