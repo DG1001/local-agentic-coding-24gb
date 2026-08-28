@@ -400,7 +400,7 @@
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
-    macOS ever gave, and fourteen confident conclusions I had to retract.</p>
+    macOS ever gave, and fifteen confident conclusions I had to retract.</p>
 
     <div class="factstrip">
       <div>Machine<b>Apple M5 Pro · 15 cores</b></div>
@@ -612,9 +612,12 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
       <code>chat_template_kwargs</code> without a word, and llama.cpp — which does accept
       <code>--chat-template-kwargs</code> — cannot load MLX weights. The route that works is
       <code>mlx_lm.server</code> (0.31.3; 0.29.1 does not know the <code>qwen3_5_moe</code> architecture):</p>
-      <pre><code>mlx_lm.server --model &lt;path&gt; --port 8890 \
-    --chat-template-args '{"enable_thinking":false}' \
-    --prompt-cache-size 1 --prompt-cache-bytes 2GB</code></pre>
+      <pre><code>sudo sysctl -w iogpu.wired_limit_mb=21504    # see Finding 12 — without this it OOMs
+mlx_lm.server --model &lt;path&gt; --port 8890 \
+    --chat-template-args '{"enable_thinking":false}'</code></pre>
+      <p>The six benchmark runs below did not need the raised limit — they never exceeded ~26,000 prompt
+      tokens in a single request. Interactive sessions do, and then the server dies mid-run while still
+      answering <code>/v1/models</code>.</p>
       <p>Same model, same 3-bit quant, same task, same harness — only the reasoning block removed:</p>
       <div class="tablewrap">
         <table>
@@ -1210,6 +1213,12 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
         install a LaunchDaemon to persist it. Don't. mlx-lm #883 recommends moving the wired limit
         <em>down</em> — from the ~75 % default toward 50–60 % — not up. Raising it lowers the threshold at
         which the kernel bug becomes reachable. I retracted that and left the sysctl at <code>0</code>.</p>
+        <p><strong>Later qualification.</strong> Finding 12 raises exactly this limit, to 21504, and it is
+        the only thing that keeps <code>mlx_lm.server</code> alive past ~18,500 prompt tokens with a 14 GB
+        model. The two are not in conflict, but the distinction is narrow and worth stating: here the KV
+        cache was growing without bound in a 145-step degenerate loop, and the ceiling is what stops the
+        machine. There, the context is fixed and the ceiling is simply too low for the weights. Raise it
+        only for a bounded context, never to paper over a runaway loop — and do not persist it.</p>
       </div>
     </div>
   </section>
@@ -1308,12 +1317,21 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
 
       <h3>mlx_lm.server</h3>
       <ul>
-        <li><strong><code>--prompt-cache-size</code> defaults to 10 — that is ten complete KV caches held
-        at once.</strong> Every step of an agent run has a different prefix, so the server allocates a new
-        cache per step and keeps them all. Step eleven dies with <code>[METAL] Command buffer execution
-        failed: Insufficient Memory</code>. Short runs pass, long runs fail — which reads exactly like an
-        unstable model until you find it. There is <strong>no default byte ceiling</strong>; set
-        <code>--prompt-cache-size 1 --prompt-cache-bytes 2GB</code> for agent work.</li>
+        <li><strong>It runs at Metal's recommended working set and has no headroom left for a 14 GB
+        model.</strong> At startup the server calls
+        <code>mx.set_wired_limit(max_recommended_working_set_size)</code> — 17.76 GB on a 24 GB M5 Pro.
+        Against 14.16 GB of weights that leaves 3.6 GB for the KV cache, activations and MLX's internal
+        buffer pool, and around 18,500 prompt tokens it dies with <code>[METAL] Command buffer execution
+        failed: Insufficient Memory</code>. Short sessions pass, long ones fail — which reads exactly like
+        an unstable model. Neither <code>--prompt-cache-size 1</code> nor <code>mx.set_cache_limit()</code>
+        prevents it; I tried both and both died at the same place. Raising the system limit does —
+        <code>sudo sysctl -w iogpu.wired_limit_mb=21504</code> makes
+        <code>max_recommended_working_set_size</code> report 21.00 GB, and the same server then handled a
+        29,516-token prompt without an error. <strong>This is the opposite of the advice in Finding
+        10</strong>: that warning came from a degenerate 145-step loop growing the KV cache without bound,
+        where the ceiling is what stops a kernel panic. A model with a fixed context is a different case,
+        but the risk is not zero. LM Studio does not have this problem with the same weights, so it
+        evidently raises the limit itself.</li>
         <li>After that OOM the server process stays alive and the client hangs indefinitely — a request
         timeout never fired. Watch the server log, not the client.</li>
         <li>It is the only one of the three runtimes that passes <code>enable_thinking</code> to the
@@ -1573,6 +1591,17 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
           <h4>"There is no prefix caching — <code>cache.read</code> is 0"</h4>
           <p>A reporting gap, not an absence. Prompt throughput rises from 71 to 599 tok/s over six
           calls; llama.cpp reuses the prefix and LM Studio simply does not say so.</p>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="stamp">21:26</div>
+        <div class="col">
+          <h4>"The mlx_lm.server OOM is <code>--prompt-cache-size</code> holding ten KV caches" <em>(published)</em></h4>
+          <p>Wrong twice in a row. With <code>--prompt-cache-size 1</code> it died again, and again with
+          <code>mx.set_cache_limit()</code>. The real ceiling is Metal's recommended working set — 17.76 GB
+          against 14.16 GB of weights. <code>iogpu.wired_limit_mb=21504</code> took the same server from
+          failing at 18,502 prompt tokens to handling 29,516. Both times I had a plausible mechanism,
+          changed the setting, and never checked that the change prevented the crash.</p>
         </div>
       </div>
       <div class="entry">

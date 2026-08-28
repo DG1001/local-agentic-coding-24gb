@@ -174,10 +174,14 @@ Getting that argument to the template is the whole difficulty. LM Studio discard
 `mlx_lm.server` (0.31.3; 0.29.1 does not know the `qwen3_5_moe` architecture):
 
 ```sh
+sudo sysctl -w iogpu.wired_limit_mb=21504    # see Finding 12 — without this it OOMs
 mlx_lm.server --model <path> --port 8890 \
-    --chat-template-args '{"enable_thinking":false}' \
-    --prompt-cache-size 1 --prompt-cache-bytes 2GB
+    --chat-template-args '{"enable_thinking":false}'
 ```
+
+The six benchmark runs below did not need the raised limit — they never exceeded ~26,000
+prompt tokens in a single request. Interactive sessions do, and then the server dies mid-run
+while still answering `/v1/models`.
 
 Same model, same 3-bit quant, same task, same harness — only the reasoning block removed:
 
@@ -610,6 +614,13 @@ misconfiguration in Finding 3.
 > **Do not do what I did:** I had raised `iogpu.wired_limit_mb` to 20480 and was about to
 > install a LaunchDaemon to persist it. Don't. mlx-lm #883 recommends moving the wired
 > limit *down* — from the ~75 % default toward 50–60 % — not up.
+>
+> **Later qualification.** Finding 12 raises exactly this limit, to 21504, and it is the only
+> thing that keeps `mlx_lm.server` alive past ~18,500 prompt tokens with a 14 GB model. The
+> two are not in conflict, but the distinction is narrow and worth stating: here the KV cache
+> was growing without bound in a 145-step degenerate loop, and the ceiling is what stops the
+> machine. There, the context is fixed and the ceiling is simply too low for the weights. Raise
+> it only for a bounded context, never to paper over a runaway loop — and do not persist it.
 
 ---
 
@@ -666,12 +677,28 @@ completions reached 2,361.
 
 ### mlx_lm.server
 
-- **`--prompt-cache-size` defaults to 10 — that is ten complete KV caches held at once.**
-  Every step of an agent run has a different prefix, so the server allocates a new cache per
-  step and keeps them all. Step eleven dies with `[METAL] Command buffer execution failed:
-  Insufficient Memory`. Short runs pass, long runs fail — which reads exactly like an
-  unstable model until you find it. There is **no default byte ceiling**; set
-  `--prompt-cache-size 1 --prompt-cache-bytes 2GB` for agent work.
+- **It runs at Metal's recommended working set and has no headroom left for a 14 GB model.**
+  At startup the server calls `mx.set_wired_limit(max_recommended_working_set_size)` — 17.76 GB
+  on a 24 GB M5 Pro. Against 14.16 GB of weights that leaves 3.6 GB for the KV cache,
+  activations and MLX's internal buffer pool, and around 18,500 prompt tokens it dies with
+  `[METAL] Command buffer execution failed: Insufficient Memory`. Short sessions pass, long
+  ones fail — which reads exactly like an unstable model.
+
+  Neither `--prompt-cache-size 1` nor `mx.set_cache_limit()` prevents it; I tried both and
+  both died at the same place. Raising the system limit does:
+
+  ```sh
+  sudo sysctl -w iogpu.wired_limit_mb=21504   # 21 of 24 GB; not persistent
+  ```
+
+  `max_recommended_working_set_size` then reports 21.00 GB, and the same server handled a
+  prompt of 29,516 tokens without an error. **Note that this is the opposite of the advice in
+  Finding 10** — that warning came from a degenerate 145-step loop growing the KV cache
+  without bound, where the ceiling is what stops a kernel panic. A model with a fixed context
+  is a different case, but the risk is not zero.
+
+  LM Studio does not have this problem with the same weights, so it evidently raises the
+  limit itself.
 - After that OOM the server process stays alive and the client hangs indefinitely — a
   `REQ_TIMEOUT` on the request never fired. Watch the server log, not the client.
 - It is the only one of the three runtimes that passes `enable_thinking` to the template
@@ -778,7 +805,7 @@ Wired peaked at 17.99 GB (75 %), against 17.82 GB predicted by `tools/kvcalc.py`
 
 ## Corrections
 
-Fourteen conclusions had to be retracted. They are here because the pattern transfers better
+Fifteen conclusions had to be retracted. They are here because the pattern transfers better
 than the individual cases: a real symptom, a plausible cause, no control experiment.
 
 | Time | Claim | What was actually true |
@@ -797,8 +824,9 @@ than the individual cases: a real symptom, a plausible cause, no control experim
 | 14:20 | "the user had to nudge it four times" | the "Continue if…" messages are OpenCode's own, flagged `synthetic: true, compaction_continue: true`. The run *was* autonomous |
 | 14:35 | "there is no prefix caching — `cache.read` is 0" | a reporting gap. Prompt throughput rises 71 → 599 tok/s across the run; llama.cpp reuses the prefix, LM Studio just does not say so |
 | 21:05 | "Qwen3.6 needs its reasoning block for tool use" *(published)* | `/no_think` is not in that model's chat template at all. The template still opened `<think>`, so the model was told not to think while sitting in thinking mode. With `enable_thinking: false` it goes 6/6 at a 5.4× faster median |
+| 21:26 | "the mlx_lm.server OOM is `--prompt-cache-size` holding ten KV caches" *(published)* | wrong twice in a row. With `--prompt-cache-size 1` it died again, and again with `mx.set_cache_limit()`. The real ceiling is Metal's recommended working set — 17.76 GB against 14.16 GB of weights. `iogpu.wired_limit_mb=21504` took the same server from failing at 18,502 prompt tokens to handling 29,516 |
 
-**The pattern.** Eight of the fourteen were tooling behaviour mistaken for model behaviour:
+**The pattern.** Nine of the fifteen were tooling behaviour mistaken for model behaviour:
 backgrounding `opencode run` (EOF on stdin, instant exit 0), the permission prompt (silent
 hang), my verification logic (correct code scored as failure), Devstral's context cap,
 Gemma's channel markers, and a chat template that ignored the switch I was setting. Every
@@ -807,6 +835,14 @@ one looked exactly like a model failing.
 With a harness you wrote yourself, the first hypothesis for a surprising result should be
 the harness — not the model. I reached for the model every time, because that was the
 interesting answer.
+
+The `mlx_lm.server` OOM adds a second failure mode to that: I was wrong about it **twice**,
+and the first wrong answer was published. Both times I found a plausible mechanism — a cache
+holding ten entries, then an unbounded buffer pool — changed the setting, and did not verify
+that the change actually prevented the crash. The control that settled it took four minutes:
+send progressively larger prompts until it dies, note the number, change one thing, repeat.
+18,502 tokens against 29,516 is not a matter of interpretation. A plausible mechanism you
+have not falsified is a guess wearing a lab coat.
 
 The others share a different shape: measured a real effect on one model and stated it as a
 general principle. The control experiment that would have caught all of them — the same

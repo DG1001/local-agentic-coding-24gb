@@ -244,8 +244,7 @@
       "thinking": false,
       "server_flags": [
         "--chat-template-args {\"enable_thinking\":false}",
-        "--prompt-cache-size 1",
-        "--prompt-cache-bytes 2GB"
+        "--prompt-cache-size 1"
       ],
       "passed": 6,
       "of": 6,
@@ -301,6 +300,26 @@
         "median_s": "176.8 -> 32.5",
         "green": "3/4 -> 6/6",
         "note": "The one red run with thinking spent 8211 reasoning tokens in two steps and ended in a token-ID-0 loop. That failure mode cannot occur without a reasoning block."
+      },
+      "metal_working_set": {
+        "issue": "mlx_lm.server calls set_wired_limit(max_recommended_working_set_size) at startup: 17.76 GB on this machine, against 14.16 GB of weights. Around 18,500 prompt tokens it dies with [METAL] Command buffer execution failed: Insufficient Memory, while the HTTP server stays alive and keeps answering /v1/models.",
+        "not_the_cause": [
+          "--prompt-cache-size 1",
+          "mx.set_cache_limit(1.5 GB)"
+        ],
+        "fix": "sudo sysctl -w iogpu.wired_limit_mb=21504  (not persistent)",
+        "measured": {
+          "before": {
+            "working_set_gb": 17.76,
+            "died_at_prompt_tokens": 18502
+          },
+          "after": {
+            "working_set_gb": 21.0,
+            "largest_prompt_tokens_ok": 29516
+          }
+        },
+        "caveat": "This is the opposite of Finding 10's advice. That warning came from a degenerate 145-step loop growing the KV cache without bound; a fixed-context model is a different case, but the risk is not zero.",
+        "note": "The six runs recorded here did not need the raised limit -- they stayed under ~26,000 prompt tokens per request. Interactive sessions exceed that."
       }
     },
     "gemma-4-26b-a4b-TurboFieldfare": {
