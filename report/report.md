@@ -2,7 +2,7 @@
 
 *Field notes — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Eight models, 350 tool calls, six identical runs per configuration. Every model aced the
+Eight models, 434 tool calls, six to twelve identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
 desktop as the only warning macOS ever gave, and thirteen confident conclusions I had to
@@ -102,6 +102,7 @@ The same task for the other models:
 |---|---:|---|---:|---:|---:|---:|
 | gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6** | 55 s | 1/41 | 16.1 GB · 67 % |
 | Qwen3.8-27B IQ4_XS | 14.25 GB | llama.cpp | **6/6** | 212 s | 0/39 | 17.4 GB · 73 % |
+| Qwen3.8-27B IQ4_XS, no thinking | 14.25 GB | llama.cpp | 11/12 | **113 s** | 0/84 | 17.1 GB · 71 % |
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6** | **57 s** | 0/28 | **9.4 GB · 39 %** |
 | Nanbeige4.2-3B Q4_K_M | **2.68 GB** | llama.cpp ¹ | 5/6 | 62 s | 0/42 | 11.3 GB · 47 % |
 | Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6 | 156 s | 0/30 | 12.3 GB · 51 % |
@@ -205,13 +206,48 @@ The generalisation from the first attempt — "Qwen3.6 needs its reasoning for t
 was drawn from a mechanism that never disabled reasoning in the first place. What it
 actually measured was a model given contradictory instructions.
 
+### The same switch on a dense model: half the time, and a new failure mode
+
+Qwen3.8-27B is GGUF, so `llama-server --reasoning off` reaches the switch directly — no
+`mlx_lm.server`, no raised wired limit. Twelve runs against six, everything else identical
+(16,384 context, one slot, `MAX_TOK=4096`):
+
+| | thinking on | thinking off |
+|---|---:|---:|
+| Verified | 6/6 | 11/12 |
+| Median | 211.9 s | **113.0 s** |
+| Range *(green runs)* | 180.4–261.9 s | **58.7–164.4 s** |
+| Steps | 5–7 | 4–8, plus one outlier at 30 |
+| Reasoning tokens | 571–1,067 | 0 |
+| Schema errors | 0/39 | 0/84 |
+
+**The distributions do not overlap.** The slowest green run without thinking (164.4 s) beat
+the fastest run with it (180.4 s). Median halves.
+
+I expected less. Qwen3.8 spent only 571–1,067 reasoning tokens per run against the MoE's
+864–8,211, so there looked to be little to save. But the saving is not only in the reasoning
+tokens — it is in the step count, and every step resends the whole context through all 27
+billion parameters. Four steps instead of seven is worth more than a thousand tokens of
+thinking.
+
+The cost is one failed run in twelve, and it failed in a way none of the others did: **30
+`bash` calls, zero writes, the file untouched, the suite still at its starting 15/22.** Not a
+slow run — a model that inspected and never committed to an edit. One in twelve against
+zero in six does not separate statistically (the interval on 1/12 runs from roughly 0.2 % to
+36 %), so treat it as a rare mode with a clear signature rather than a measured rate. It did
+not appear in the MoE's runs at all.
+
+So the switch is not a free win everywhere. On the MoE it improved both speed and
+reliability. Here it halves the time and may cost a little reliability — worth taking for
+interactive work, worth a second look for anything unattended.
+
 ---
 
 ## Finding 2 — One malformed tool call in 302
 
 The question that started this investigation was whether 3-bit quantisation was
 corrupting tool arguments. Across the whole study — six models, three prompt sizes, two
-sampling regimes, plus the repair task — **350 tool calls produced exactly one schema
+sampling regimes, plus the repair task — **434 tool calls produced exactly one schema
 failure**: a `write` with a completely empty arguments object. The agent recovered on the
 next step and the run still went green.
 
@@ -812,7 +848,7 @@ than the individual cases: a real symptom, a plausible cause, no control experim
 |---|---|---|
 | 09:58 | "wired memory is running away" | ramp to a flat plateau, 30 MB drift. Aborted a valid measurement for nothing |
 | 10:07 | "the output budget is too small" | a direct API call returned a clean tool call in 118 tokens |
-| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 350 tool calls |
+| 10:28 | "the 3-bit quantisation is defective" | real evidence, wrong reading: it was the sampling. 1 error in 434 tool calls |
 | 10:37 | "system prompt size is irrelevant" | true only under broken sampling. With it fixed, prompt size was the strongest predictor |
 | 10:53 | "max_tokens 2048 is enough" | misread my own table: 70–210 were reasoning, not completion tokens |
 | 11:15 | "it was the sampling" *(published)* | control against gpt-oss: 6/6 with the same broken config |

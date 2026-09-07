@@ -396,7 +396,7 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Eight models, 350 tool calls, six identical runs per configuration. Every model
+    <p class="standfirst">Eight models, 434 tool calls, six to twelve identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
@@ -570,6 +570,7 @@ iogpu.wired_limit_mb  leave at 0</code></pre>
         <tbody>
           <tr><th>gpt-oss-20b MXFP4</th><td>MLX</td><td class="num"><span class="pill ok">6 / 6</span></td><td class="num">55 s</td><td class="num">1 / 41</td><td class="num">16.1 GB · 67 %</td></tr>
           <tr><th>Qwen3.8-27B IQ4_XS</th><td>llama.cpp</td><td class="num"><span class="pill ok">6 / 6</span></td><td class="num">212 s</td><td class="num">0 / 39</td><td class="num">17.4 GB · 73 %</td></tr>
+          <tr><th>Qwen3.8-27B IQ4_XS, no thinking</th><td>llama.cpp</td><td class="num"><span class="pill ok">11 / 12</span></td><td class="num"><strong>113 s</strong></td><td class="num">0 / 84</td><td class="num">17.1 GB · 71 %</td></tr>
           <tr><th><strong>Qwen3.5-9B 4-bit</strong></th><td>MLX</td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">57 s</td><td class="num">0 / 28</td><td class="num"><strong>9.4 GB · 39 %</strong></td></tr>
           <tr><th>Gemma 4 12B Q4_K_M</th><td>llama.cpp</td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">156 s</td><td class="num">0 / 30</td><td class="num">12.3 GB · 51 %</td></tr>
           <tr><th>Nanbeige4.2-3B Q4_K_M</th><td>llama.cpp <em>(upstream only)</em></td><td class="num"><span class="pill ok">5 / 6</span></td><td class="num">62 s</td><td class="num">0 / 42</td><td class="num">11.3 GB · 47 %</td></tr>
@@ -640,6 +641,39 @@ mlx_lm.server --model &lt;path&gt; --port 8890 \
       <p>The generalisation from the first attempt — &ldquo;Qwen3.6 needs its reasoning for tool use&rdquo;
       — was drawn from a mechanism that never disabled reasoning in the first place. What it actually
       measured was a model given contradictory instructions.</p>
+
+      <h3>The same switch on a dense model: half the time, and a new failure mode</h3>
+      <p>Qwen3.8-27B is GGUF, so <code>llama-server --reasoning off</code> reaches the switch directly — no
+      <code>mlx_lm.server</code>, no raised wired limit. Twelve runs against six, everything else identical
+      (16,384 context, one slot, <code>MAX_TOK=4096</code>):</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th></th><th class="num">thinking on</th><th class="num">thinking off</th></tr></thead>
+          <tbody>
+            <tr><th>Verified</th><td class="num"><span class="pill ok">6 / 6</span></td><td class="num"><span class="pill ok">11 / 12</span></td></tr>
+            <tr><th>Median</th><td class="num">211.9 s</td><td class="num"><strong>113.0 s</strong></td></tr>
+            <tr><th>Range <em>(green runs)</em></th><td class="num">180.4–261.9 s</td><td class="num"><strong>58.7–164.4 s</strong></td></tr>
+            <tr><th>Steps</th><td class="num">5–7</td><td class="num">4–8, plus one outlier at 30</td></tr>
+            <tr><th>Reasoning tokens</th><td class="num">571–1,067</td><td class="num">0</td></tr>
+            <tr><th>Schema errors</th><td class="num">0 / 39</td><td class="num">0 / 84</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>The distributions do not overlap.</strong> The slowest green run without thinking (164.4 s)
+      beat the fastest run with it (180.4 s). Median halves.</p>
+      <p>I expected less. Qwen3.8 spent only 571–1,067 reasoning tokens per run against the MoE's
+      864–8,211, so there looked to be little to save. But the saving is not only in the reasoning tokens —
+      it is in the step count, and every step resends the whole context through all 27 billion parameters.
+      Four steps instead of seven is worth more than a thousand tokens of thinking.</p>
+      <p>The cost is one failed run in twelve, and it failed in a way none of the others did: <strong>30
+      <code>bash</code> calls, zero writes, the file untouched, the suite still at its starting
+      15/22.</strong> Not a slow run — a model that inspected and never committed to an edit. One in twelve
+      against zero in six does not separate statistically (the interval on 1/12 runs from roughly 0.2 % to
+      36 %), so treat it as a rare mode with a clear signature rather than a measured rate. It did not
+      appear in the MoE's runs at all.</p>
+      <p>So the switch is not a free win everywhere. On the MoE it improved both speed and reliability.
+      Here it halves the time and may cost a little reliability — worth taking for interactive work, worth
+      a second look for anything unattended.</p>
     </div>
 
     <div class="col">
@@ -662,7 +696,7 @@ mlx_lm.server --model &lt;path&gt; --port 8890 \
       <h2><span class="num">Finding 2</span>One malformed tool call in 302</h2>
       <p>The question that started this investigation was whether 3-bit quantisation was corrupting tool
       arguments. Across the whole study — six models, three prompt sizes, two sampling regimes, plus
-      the repair task — <strong>350 tool calls produced exactly one schema failure</strong>: a
+      the repair task — <strong>434 tool calls produced exactly one schema failure</strong>: a
       <code>write</code> with a completely empty arguments object. The agent recovered on the next step
       and the run still went green.</p>
       <p>The harness validated this itself rather than trusting the agent framework, declaring the JSON

@@ -3,7 +3,7 @@
 Measurements and tooling for one question: which local model is actually usable for
 agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Eight models, 350 tool calls, six identical runs per configuration, measured on an Apple
+Eight models, 434 tool calls, six to twelve identical runs per configuration, measured on an Apple
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
@@ -24,6 +24,7 @@ send.
 |---|---:|---|---|---:|
 | gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6**, 55 s median | 67 % |
 | Qwen3.8-27B IQ4_XS | 14.25 GB | llama.cpp | **6/6**, 212 s median | 73 % |
+| Qwen3.8-27B IQ4_XS, no thinking | 14.25 GB | llama.cpp | 11/12, **113 s median** | 71 % |
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6**, 57 s median | **39 %** |
 | Nanbeige4.2-3B Q4_K_M | **2.68 GB** | llama.cpp (upstream) | 5/6, 62 s median | 47 % |
 | Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6, 156 s median | 51 % |
@@ -49,7 +50,8 @@ as gpt-oss on the same test.
 and 14.25 GB, matches gpt-oss exactly on reliability and needs a 212 s median against
 55 s. Dense models compute every parameter per token; MoE models activate a fraction.
 Pick by *active* parameters, not total ones — the companion study measures the same
-effect at 128 GB.
+effect at 128 GB. (Turning its reasoning block off halves that to 113 s over twelve runs,
+at 11/12 instead of 6/6 — see the report.)
 
 **And for four of eight models, the inference engine decided usability.** MLX capped
 Devstral's context at 4,864, refused to load Qwen3.6-27B at all, and broke on Gemma's

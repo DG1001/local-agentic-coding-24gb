@@ -634,7 +634,127 @@
           "reasoning": 1113,
           "wall_s": 261.9
         }
-      ]
+      ],
+      "thinking": true
+    },
+    "Qwen3.8-27B-UD-IQ4_XS-nothink": {
+      "_comment": "Same weights, quant, context and harness as Qwen3.8-27B-UD-IQ4_XS, reasoning block disabled. GGUF, so llama-server --reasoning off reaches the switch directly -- no mlx_lm.server and no raised wired limit needed.",
+      "runtime": "llama.cpp (GGUF) via llama-server, --reasoning off",
+      "thinking": false,
+      "quant": "unsloth UD-IQ4_XS",
+      "weights_gb": 14.25,
+      "context_granted": 16384,
+      "parallel": 1,
+      "passed": 11,
+      "of": 12,
+      "median_s": 113.0,
+      "median_green_s": 111.2,
+      "range_green_s": [
+        58.7,
+        164.4
+      ],
+      "tool_calls": 84,
+      "schema_errors": 0,
+      "tests_untouched": "12/12",
+      "reasoning_tokens": 0,
+      "wired_peak_gb": 17.11,
+      "runs": [
+        {
+          "steps": 7,
+          "bash": 5,
+          "write": 1,
+          "wall_s": 127.9,
+          "green": true
+        },
+        {
+          "steps": 4,
+          "bash": 3,
+          "write": 0,
+          "wall_s": 58.7,
+          "green": true
+        },
+        {
+          "steps": 5,
+          "bash": 4,
+          "write": 0,
+          "wall_s": 68.7,
+          "green": true
+        },
+        {
+          "steps": 30,
+          "bash": 30,
+          "write": 0,
+          "wall_s": 374.0,
+          "green": false
+        },
+        {
+          "steps": 6,
+          "bash": 4,
+          "write": 1,
+          "wall_s": 114.8,
+          "green": true
+        },
+        {
+          "steps": 6,
+          "bash": 4,
+          "write": 1,
+          "wall_s": 111.2,
+          "green": true
+        },
+        {
+          "steps": 6,
+          "bash": 5,
+          "write": 0,
+          "wall_s": 80.8,
+          "green": true
+        },
+        {
+          "steps": 7,
+          "bash": 5,
+          "write": 1,
+          "wall_s": 145.5,
+          "green": true
+        },
+        {
+          "steps": 8,
+          "bash": 6,
+          "write": 1,
+          "wall_s": 164.4,
+          "green": true
+        },
+        {
+          "steps": 4,
+          "bash": 4,
+          "write": 0,
+          "wall_s": 75.6,
+          "green": true
+        },
+        {
+          "steps": 4,
+          "bash": 3,
+          "write": 0,
+          "wall_s": 66.8,
+          "green": true
+        },
+        {
+          "steps": 7,
+          "bash": 5,
+          "write": 1,
+          "wall_s": 153.9,
+          "green": true
+        }
+      ],
+      "failure_mode": {
+        "run": 4,
+        "signature": "30 bash calls, 0 writes, duration.py byte-identical to pristine, suite unchanged at its starting 15/22. Hit the step limit without ever committing to an edit.",
+        "note": "1 in 12 against 0 in 6 does not separate statistically -- the interval on 1/12 spans roughly 0.2% to 36%. A rare mode with a clear signature, not a measured rate. Absent from the MoE's runs."
+      },
+      "delta_vs_thinking": {
+        "median_s": "211.9 -> 113.0",
+        "green": "6/6 -> 11/12",
+        "distributions": "do not overlap: slowest green without thinking 164.4 s beats the fastest with it, 180.4 s",
+        "why": "the saving is in the step count, not only the reasoning tokens -- every step resends the whole context through all 27B parameters"
+      }
     }
   },
   "kv_cache": {
