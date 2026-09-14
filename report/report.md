@@ -5,7 +5,7 @@
 Eight models, 434 tool calls, six to twelve identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
-desktop as the only warning macOS ever gave, and thirteen confident conclusions I had to
+desktop as the only warning macOS ever gave, and sixteen confident conclusions I had to
 retract.
 
 > The formatted version with an interactive chart is in [`report.html`](report.html).
@@ -690,10 +690,19 @@ completions reached 2,361.
 - Model keys match by prefix. `qwen3.6-35b-a3b` is a prefix of `qwen3.6-35b-a3b-ud-mlx`,
   and with `-y` it warns "2 models match, loading the first one" and picks whichever.
   Renaming with a leading dot does not hide it — LM Studio scans dot-directories.
-- The `modelLoadingGuardrails` naming is **inverted**: `mode: "high"` is the permissive
-  default, `mode: "low"` is strict.
-- The guardrail rejects on weights alone. A 16.08 GB model failed identically at 16,384,
-  8,192 and 4,096 context with 20 GB free. "Load Anyway" exists only in the GUI.
+- `modelLoadingGuardrails.mode` takes **`off` / `relaxed` / `balanced` / `strict` /
+  `custom`** (the enum is in the app bundle). An earlier draft of this report described it
+  as inverted `high` / `low`; `"high"` is not a valid value at all — it fails the schema
+  and falls through to the default, which is why a settings file can sit there reading
+  `mode: "high"` while the guardrail behaves as though nothing were configured.
+- The guardrail rejects on **weights × 1.4**, and nothing else. A 14.977 GiB model
+  directory produced an estimate of 20.97 GiB — identical at 32,768, 16,384 and 8,192
+  context, because the context never enters the arithmetic. For a hybrid-attention model
+  that multiplier is off by roughly 4x: Qwen3.6-27B has 48 of its 64 layers on linear
+  attention, so its KV cost is 64 KiB/token, and the real footprint at 32k context is
+  ~18.3 GiB against the 20.97 GiB that got it refused.
+- `alwaysAllowLoadAnyway: true` does not help `lms load` — "Load Anyway" exists only in
+  the GUI. Setting `mode: "custom"` with `customThresholdBytes` raised is the CLI path.
 - Context can be silently reduced at load time (Finding 4). Always check `lms ps`.
 - Server logs under `~/.lmstudio/server-logs/` are where real diagnosis happens. Note that
   the counter `Done reasoning. Reasoned for N seconds` is **cumulative since server
@@ -839,9 +848,115 @@ Wired peaked at 17.99 GB (75 %), against 17.82 GB predicted by `tools/kvcalc.py`
 
 ---
 
+## Finding 14 — The memory-for-latency trade, finally with a number on it
+
+Finding 9 established that streaming MoE experts off SSD trades the whole memory problem
+for latency, and then had to state the cost qualitatively: *"and then it is too slow"* —
+a verdict from driving TurboFieldfare through OpenCode, not from a measurement. It could
+not be otherwise. TurboFieldfare is a bespoke Swift runtime for one model, so there is
+nothing to compare it against; the same weights cannot be run without the streaming.
+
+[edge0](https://github.com/Edge0-AI/Edge0) (Apache-2.0, open-sourced 2026-09-10) closes
+that gap. It is the same idea generalised — SSD expert offload, plus a trained *prerouter*
+that predicts the next token's expert set one step ahead, plus *Recover-LoRA* adapters
+that claw back some of the int4 loss. Crucially, its released checkpoint is a plain MLX
+4-bit **Qwen3.6-35B-A3B** — the same base as the entries above, and an ordinary
+`config.json` + `model-*.safetensors` directory. So `mlx_lm` loads it natively, out of the
+same virtualenv, on the same MLX 0.30.6. Same weights, same runtime version, same prompt.
+The only variable left is the streaming.
+
+| | streamed (edge0) | native (`mlx_lm`) | ratio |
+|---|---:|---:|---:|
+| Decode | 19.5 tok/s | 90.4 tok/s | **4.6x slower** |
+| Peak active memory | 4.19 GiB | 19.88 GiB | **4.7x smaller** |
+| Prefill, warm | 115 tok/s | 116 tok/s | — |
+
+**On raw decode the trade is almost exactly linear**: a factor of 4.7 in memory for a
+factor of 4.6 in speed. That is a better exchange rate than Finding 9's prose implies, and
+it is the number edge0's own README does not publish — it reports 14.9–17.7 tok/s with no
+native reference to compare against.
+
+### The agentic penalty is three times the decode penalty
+
+Then the same checkpoint went through `repair_task`, thinking off, same sampling as the
+3-bit baseline:
+
+| | Qwen3.6-35B-A3B 3-bit native | edge0 int4 streamed |
+|---|---:|---:|
+| Median | 32.5 s | **413.5 s** |
+| Range | 20.5–73.0 s | 227.2–485.2 s |
+| Verified | 6/6 | 5/5 usable |
+| Steps | 6–13 | 6–7 |
+| Schema errors | 0/48 | 4/29 |
+
+**A factor of 12.7, against 4.6 on decode.** The step count did not explode — it is if
+anything lower. The cost is at the turn boundaries: a repair run is six or seven turns, and
+every turn re-prefills the grown context with experts that are cold again. The prerouter
+predicts one step ahead *inside* a decode loop; nothing carries across a turn. This is
+Finding 13 from the other side — there, six tools cost nothing and the context split cost
+everything; here, the tokens are cheap and the turns are expensive. Both say the same
+thing: **on an agentic workload, measure turns, not tokens.**
+
+Anyone sizing a streaming runtime from its published decode figure will therefore
+underestimate agentic latency by roughly 3x.
+
+### Three things the vendor numbers do not say
+
+**Peak memory ran 44 % over the published figure.** 2.9 GiB claimed, 3.29 GiB on the first
+run and 4.19 GiB once the expert cache warmed. The published number looks like a best case,
+not an operating point. Decode, by contrast, came in *above* spec — 19.5 tok/s against
+14.9–17.7 — the benchmark machine was an M4 Pro.
+
+**There is no tool calling.** `ChatRequest` has no `tools` field and `finish_reason` is
+hardcoded to `"stop"`; the only two occurrences of `tool_call` in the entire source are in
+the 8B engine, one of them literally `tools=None`. The model can do it — its chat template
+knows the format — but the server never passes the definitions through. Measuring
+`repair_task` at all required a local shim that renders the tools block into the prompt
+exactly as `chat_template.jinja` lines 45–53 would and parses the reply back. The rendering
+was verified byte-identical against the template before any number was taken. As shipped,
+edge0 cannot drive OpenCode.
+
+**Qwen3.6 no longer uses the JSON tool format.** It is now nested XML —
+`<tool_call><function=name><parameter=key>value</parameter></function></tool_call>` — and
+the template wants `arguments` as a *dict*, so replaying an OpenAI-shaped history straight
+back into it raises `TypeError: Can only get item pairs from a mapping`. A parser from the
+Qwen3 era silently finds zero tool calls.
+
+### Two findings that are not about edge0
+
+The four schema errors are the model's, not the shim's. Across every logged raw reply the
+model emitted `<parameter=command>` nine times, `<parameter=content>` three times and
+`<parameter=filePath>` **once** — in two of three `write` calls the required path was never
+generated. The one well-formed call parsed in full, multi-line Python and escaped quotes
+included. Against 0/48 for the 3-bit baseline on the same base model, that is a real
+regression, though this run cannot separate int4 from the adapters as its cause.
+
+And four of nine runs never produced a number at all, because the model invented a `read`
+tool and `bench/agentlib.py` did this:
+
+```python
+spec = next(t["function"] for t in TOOLS if t["function"]["name"] == name)
+```
+
+`next()` without a default raises `StopIteration` on an unknown name and takes the whole
+run with it — while the `return "ERROR: unknown tool"` at the bottom of that same function,
+written for exactly this case, is unreachable. Every model measured before this one stuck
+to the declared tools, so the bug sat there unseen. It is fixed now; the numbers above come
+from the unfixed harness, which is why they are reported as 5 usable runs out of 9.
+
+### Verdict
+
+Unchanged from Finding 9, but now quantified. On 24 GB this is the wrong trade: the 35B MoE
+already runs at 17.4 GB with a 32.5 s median, and paying 12.7x the wall-clock to free
+memory that is not scarce is not a bargain. On 8 or 16 GB, where the alternative is not
+running a 35B at all, the same arithmetic reads entirely differently — and that is the
+hardware edge0 is built for.
+
+---
+
 ## Corrections
 
-Fifteen conclusions had to be retracted. They are here because the pattern transfers better
+Sixteen conclusions had to be retracted. They are here because the pattern transfers better
 than the individual cases: a real symptom, a plausible cause, no control experiment.
 
 | Time | Claim | What was actually true |
@@ -861,6 +976,7 @@ than the individual cases: a real symptom, a plausible cause, no control experim
 | 14:35 | "there is no prefix caching — `cache.read` is 0" | a reporting gap. Prompt throughput rises 71 → 599 tok/s across the run; llama.cpp reuses the prefix, LM Studio just does not say so |
 | 21:05 | "Qwen3.6 needs its reasoning block for tool use" *(published)* | `/no_think` is not in that model's chat template at all. The template still opened `<think>`, so the model was told not to think while sitting in thinking mode. With `enable_thinking: false` it goes 6/6 at a 5.4× faster median |
 | 21:26 | "the mlx_lm.server OOM is `--prompt-cache-size` holding ten KV caches" *(published)* | wrong twice in a row. With `--prompt-cache-size 1` it died again, and again with `mx.set_cache_limit()`. The real ceiling is Metal's recommended working set — 17.76 GB against 14.16 GB of weights. `iogpu.wired_limit_mb=21504` took the same server from failing at 18,502 prompt tokens to handling 29,516 |
+| — | "LM Studio's guardrail mode is an inverted `high` / `low`" *(published)* | the enum is `off` / `relaxed` / `balanced` / `strict` / `custom`. `"high"` fails the schema and falls through to the default, so the setting I had been reading as "permissive" was configuring nothing. Read the bundle, not the settings file |
 
 **The pattern.** Nine of the fifteen were tooling behaviour mistaken for model behaviour:
 backgrounding `opencode run` (EOF on stdin, instant exit 0), the permission prompt (silent

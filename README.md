@@ -102,10 +102,13 @@ failure and was not.
 | `hf download` aborts instantly, target directory stays at 4 KB | `HF_HUB_ENABLE_HF_TRANSFER=1` set but `hf_transfer` not installed | Finding 12 |
 | Wired memory far higher than weights + KV | LM Studio's `PARALLEL` holds the KV cache per slot — use `--parallel 1` | Finding 7 |
 | A ~16 GB quant refuses to load, a ~14 GB one is fine | Guardrail threshold, not a hard limit — recompute with `tools/kvcalc.py` before blaming the model | Findings 4, 5 |
+| Tool calls parse as zero against a Qwen3.6 model | Qwen3.6 emits nested XML (`<function=..><parameter=..>`), not the Qwen3-era JSON form | Finding 14 |
+| A bench run dies with `StopIteration` mid-task | The model invented a tool name; `next()` without a default in the harness took the run down | Finding 14 |
+| Streaming MoE runtime benchmarks well but feels far slower in an agent loop | Decode cost and agentic cost differ by ~3x — every turn re-prefills with cold experts | Finding 14 |
 
 **Models measured here:** gpt-oss-20b · Qwen3.5-9B · Qwen3.8-27B · Qwen3.6-35B-A3B · Qwen3.6-27B ·
 Devstral-Small-2-24B · Gemma 4 12B · Gemma 4 26B-A4B · Nanbeige4.2-3B
-**Runtimes:** MLX · llama.cpp · TurboFieldfare (SSD expert streaming)
+**Runtimes:** MLX · llama.cpp · TurboFieldfare (SSD expert streaming) · edge0 (streaming MoE)
 **Harnesses:** OpenCode · Hermes Agent · [jaja](https://github.com/DG1001/jaja) · a purpose-built 180-line Python loop
 **Hardware:** Apple M5 Pro, 24 GB unified memory, macOS 26.6
 
