@@ -50,7 +50,16 @@ def build_payload(model, msgs):
 
 def run_tool(name, args, workdir, stats):
     """Runs the tool after validating its arguments against the schema."""
-    spec = next(t["function"] for t in TOOLS if t["function"]["name"] == name)
+    spec = next((t["function"] for t in TOOLS if t["function"]["name"] == name),
+                None)
+    if spec is None:
+        # A hallucinated tool name is a schema failure like any other -- without
+        # the default above, next() raises StopIteration and kills the whole run.
+        known = [t["function"]["name"] for t in TOOLS]
+        stats["schema_errors"] += 1
+        stats["schema_detail"].append(f"{name}: unknown tool, expected {known}")
+        return f"ERROR: unknown tool {name!r}. Available tools: {known}"
+
     missing = [k for k in spec["parameters"]["required"] if k not in args]
     if missing:
         stats["schema_errors"] += 1
