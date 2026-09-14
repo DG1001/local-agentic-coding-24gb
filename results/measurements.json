@@ -322,6 +322,71 @@
         "note": "The six runs recorded here did not need the raised limit -- they stayed under ~26,000 prompt tokens per request. Interactive sessions exceed that."
       }
     },
+    "Edge0-35B-A3B-preview-streamed": {
+      "_comment": "edge0 0.1.0 (commit ba4597b, 2026-09-14), the streaming-MoE framework: expert weights are mmapped and streamed off SSD, so peak memory is bounded by the active expert set instead of the parameter count. Base is the SAME Qwen3.6-35B-A3B as the entries above, at int4 with Recover-LoRA and a K=4 prerouter. The edge0 server implements no tool calling at all (ChatRequest has no tools field, finish_reason is hardcoded to \"stop\"), so these runs went through a local shim that renders the OpenAI tools block into the prompt exactly as the checkpoint's chat_template.jinja lines 45-53 would, and parses the <function=..>/<parameter=..> reply back into tool_calls. The shim's rendering was verified byte-identical against the template before measuring.",
+      "runtime": "edge0 0.1.0 (MLX 0.30.6) via `edge0 serve` + local tool-call shim",
+      "thinking": false,
+      "quant": "int4 + Recover-LoRA (310 adapters applied, prerouter 33 heads, K=4)",
+      "weights_gb": 19.5,
+      "disk_gb": 18.0,
+      "passed": 5,
+      "of": 5,
+      "median_s": 413.5,
+      "range_s": [
+        227.2,
+        485.2
+      ],
+      "tool_calls": 29,
+      "schema_errors": 4,
+      "schema_error_detail": "All of them `write: missing ['filePath']`. Attributed to the MODEL, not the shim: across every logged raw reply the model emitted 9x <parameter=command>, 3x <parameter=content> and only 1x <parameter=filePath>, and the one well-formed call parsed in full including multi-line Python with escaped quotes.",
+      "tests_untouched": "5/5",
+      "reasoning_tokens": 0,
+      "peak_active_gib": 4.19,
+      "runs_attempted": 9,
+      "runs_lost": "4 of 9 runs died on a latent bug in bench/agentlib.py: the model invented a `read` tool and next() without a default raised StopIteration, killing the run instead of counting a schema error. Fixed after this measurement; the numbers here are from the unfixed harness.",
+      "runs": [
+        {
+          "steps": 6,
+          "tool_calls": 5,
+          "wall_s": 227.2,
+          "green": true,
+          "schema_errors": 0
+        },
+        {
+          "steps": 7,
+          "tool_calls": 6,
+          "wall_s": 405.2,
+          "green": true,
+          "schema_errors": 1
+        },
+        {
+          "steps": 7,
+          "tool_calls": 6,
+          "wall_s": 485.2,
+          "green": true,
+          "schema_errors": 1
+        },
+        {
+          "steps": 7,
+          "tool_calls": 6,
+          "wall_s": 413.5,
+          "green": true,
+          "schema_errors": 1
+        },
+        {
+          "steps": 7,
+          "tool_calls": 6,
+          "wall_s": 424.0,
+          "green": true,
+          "schema_errors": 1
+        }
+      ],
+      "delta_vs_native": {
+        "median_s": "32.5 -> 413.5",
+        "factor": 12.7,
+        "note": "The agentic penalty is nearly 3x the raw decode penalty (4.6x, see expert_streaming). A repair run is 6-7 turns and every turn re-prefills the grown context with cold experts; the prerouter only predicts within a decode loop, never across a turn boundary."
+      }
+    },
     "gemma-4-26b-a4b-TurboFieldfare": {
       "runtime": "TurboFieldfare 0.3 (SSD-Streaming)",
       "passed": 0,
@@ -1128,6 +1193,38 @@
         "bash"
       ],
       "note": "Slower than OpenCode despite a system prompt ~35x shorter. Ten turns instead of six; each turn resends the whole history. Turn count beats prompt size."
+    }
+  },
+  "expert_streaming": {
+    "_comment": "Streaming MoE experts off SSD (edge0) against the SAME checkpoint loaded natively, from the same venv, same MLX 0.30.6, same prompt, 200 timed decode tokens each. edge0's own examples/bench.py for the streamed side; a native_bench.py mirroring its measurement shape for the control. The native side loads the base int4 weights only -- mlx_lm does not apply the Recover-LoRA or prerouter adapters -- so this is a speed/memory control, not a quality one. edge0 publishes no such comparison.",
+    "model": "Edge0-35B-A3B-preview (Qwen3.6-35B-A3B int4)",
+    "prompt_tokens": 3282,
+    "streamed": {
+      "runtime": "edge0 0.1.0",
+      "decode_tok_s": 19.5,
+      "prefill_tok_s_cold_warm": [
+        76,
+        115
+      ],
+      "peak_active_gib": 4.19
+    },
+    "native": {
+      "runtime": "mlx_lm 0.31.0",
+      "decode_tok_s": 90.4,
+      "prefill_tok_s": [
+        144,
+        116
+      ],
+      "peak_active_gib": 19.88
+    },
+    "ratio": {
+      "decode": "4.6x slower streamed",
+      "peak_memory": "4.7x smaller streamed",
+      "note": "The trade is almost exactly linear on this workload."
+    },
+    "vendor_claims": {
+      "decode_tok_s": "14.9-17.7 on a Mac mini M4 Pro 24 GB; measured 19.5 here",
+      "peak_active_gib": "2.9 claimed; measured 3.29 on the first run and 4.19 once the expert cache warmed -- 44% over the published figure"
     }
   }
 }
