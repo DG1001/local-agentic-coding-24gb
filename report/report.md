@@ -916,6 +916,12 @@ exactly as `chat_template.jinja` lines 45–53 would and parses the reply back. 
 was verified byte-identical against the template before any number was taken. As shipped,
 edge0 cannot drive OpenCode.
 
+Both sides of this finding are reproducible from this repo:
+[`bench/edge0_tool_proxy.py`](../bench/edge0_tool_proxy.py) is the shim, and
+[`bench/edge0_native_bench.py`](../bench/edge0_native_bench.py) is the native control —
+copy it into an Edge0 checkout and it imports that project's own prompts, so the streamed
+and native numbers come from the same measurement shape.
+
 **Qwen3.6 no longer uses the JSON tool format.** It is now nested XML —
 `<tool_call><function=name><parameter=key>value</parameter></function></tool_call>` — and
 the template wants `arguments` as a *dict*, so replaying an OpenAI-shaped history straight
