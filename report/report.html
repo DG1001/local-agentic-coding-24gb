@@ -400,7 +400,7 @@
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
-    macOS ever gave, and fifteen confident conclusions I had to retract.</p>
+    macOS ever gave, and sixteen confident conclusions I had to retract.</p>
 
     <div class="factstrip">
       <div>Machine<b>Apple M5 Pro · 15 cores</b></div>
@@ -1311,12 +1311,20 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
         the first one" and picks whichever. Renaming the directory with a leading dot does not hide it —
         LM Studio scans dot-directories. Move it out of the models tree and delete
         <code>~/.lmstudio/.internal/model-index-cache.json</code>.</li>
-        <li><code>modelLoadingGuardrails</code> naming is <strong>inverted</strong>:
-        <code>mode: "high"</code> is the permissive default, <code>mode: "low"</code> is strict. I set it
-        to "low" believing I was relaxing it, and blocked a model that had loaded fine minutes before.</li>
-        <li>The guardrail rejects on weights alone. A 16.08 GB model failed identically at 16,384, 8,192
-        and 4,096 context with 20 GB free. The "Load Anyway" override exists only in the GUI — the CLI
-        does not expose it even with <code>alwaysAllowLoadAnyway: true</code>.</li>
+        <li><code>modelLoadingGuardrails.mode</code> takes <code>off</code> / <code>relaxed</code> /
+        <code>balanced</code> / <code>strict</code> / <code>custom</code> — the enum is in the app
+        bundle. An earlier version of this report described it as an inverted <code>high</code> /
+        <code>low</code>; <code>"high"</code> is not a valid value at all. It fails the schema and falls
+        through to the default, which is why a settings file can sit there reading
+        <code>mode: "high"</code> while the guardrail behaves as though nothing were configured.</li>
+        <li>The guardrail rejects on <strong>weights × 1.4</strong>, and nothing else. A 14.977 GiB model
+        directory produced an estimate of 20.97 GiB — identical at 32,768, 16,384 and 8,192 context,
+        because the context never enters the arithmetic. For a hybrid-attention model that multiplier is
+        off by roughly 4×: Qwen3.6-27B has 48 of its 64 layers on linear attention, so its KV cost is
+        64 KiB/token and the real footprint at 32k is ~18.3 GiB against the 20.97 that got it refused.
+        The "Load Anyway" override exists only in the GUI — the CLI does not expose it even with
+        <code>alwaysAllowLoadAnyway: true</code>. Setting <code>mode: "custom"</code> with a raised
+        <code>customThresholdBytes</code> is the CLI path.</li>
         <li>Context can be silently reduced at load time (Finding 4). Always verify with
         <code>lms ps</code>.</li>
         <li>Server logs at <code>~/.lmstudio/server-logs/</code> are where the real diagnosis lives —
@@ -1423,6 +1431,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
       offers <em>more</em> tools than OpenCode and a system prompt <strong>thirty-five times
       shorter</strong> — a few lines of German against 5,199 tokens. It should have won on prefill
       alone. It came last, and its own output says why:</p>
+    </div>
 
 <pre><code>Token: 50147 Eingabe, 2461 Ausgabe</code></pre>
 
@@ -1471,6 +1480,127 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
       report prefix reuse over the OpenAI-compatible API. Do not conclude from those zeroes that caching
       is off, and do not judge a dense model's latency by its first request.</p>
       <p>Wired peaked at 17.99 GB (75 %), against 17.82 GB predicted by <code>tools/kvcalc.py</code>.</p>
+    </div>
+  </section>
+
+  <section id="streaming">
+    <div class="col">
+      <h2><span class="num">Finding 14</span>The memory-for-latency trade, finally with a number on it</h2>
+      <p>Finding 9 established that streaming MoE experts off SSD trades the whole memory problem for
+      latency, then had to state the cost qualitatively — <em>"and then it is too slow"</em>, a verdict
+      from driving TurboFieldfare through OpenCode rather than from a measurement. It could not be
+      otherwise: TurboFieldfare is a bespoke Swift runtime for one model, so the same weights cannot be
+      run without the streaming.</p>
+      <p><a href="https://github.com/Edge0-AI/Edge0">edge0</a> (Apache-2.0, open-sourced 2026-09-10)
+      closes that gap. Same idea generalised — SSD expert offload, a trained <em>prerouter</em> that
+      predicts the next token's expert set one step ahead, and <em>Recover-LoRA</em> adapters that claw
+      back some of the int4 loss. Crucially its released checkpoint is a plain MLX 4-bit
+      <strong>Qwen3.6-35B-A3B</strong>: the same base as the rows above, in an ordinary
+      <code>config.json</code> plus <code>model-*.safetensors</code> directory. So <code>mlx_lm</code>
+      loads it natively, from the same virtualenv, on the same MLX 0.30.6. Same weights, same runtime
+      version, same prompt. The only variable left is the streaming.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Same checkpoint, 200 timed decode tokens each — only the streaming differs</caption>
+        <thead><tr><th></th><th class="num">streamed (edge0)</th><th class="num">native (mlx_lm)</th><th class="num">ratio</th></tr></thead>
+        <tbody>
+          <tr><th>Decode</th><td class="num">19.5 tok/s</td><td class="num">90.4 tok/s</td><td class="num"><strong>4.6× slower</strong></td></tr>
+          <tr><th>Peak active memory</th><td class="num">4.19 GiB</td><td class="num">19.88 GiB</td><td class="num"><strong>4.7× smaller</strong></td></tr>
+          <tr><th>Prefill, warm</th><td class="num">115 tok/s</td><td class="num">116 tok/s</td><td class="num">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>On raw decode the trade is almost exactly linear</strong> — a factor of 4.7 in memory
+      for a factor of 4.6 in speed. That is a better exchange rate than Finding 9's prose implies, and it
+      is the number edge0's own README does not publish: it reports 14.9–17.7 tok/s with no native
+      reference to compare against.</p>
+
+      <h3>The agentic penalty is three times the decode penalty</h3>
+      <p>Then the same checkpoint went through <code>repair_task</code>, thinking off, same sampling as
+      the 3-bit baseline.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Qwen3.6-35B-A3B, native 3-bit against edge0's streamed int4</caption>
+        <thead><tr><th></th><th class="num">native 3-bit</th><th class="num">edge0 streamed</th></tr></thead>
+        <tbody>
+          <tr><th>Median</th><td class="num">32.5 s</td><td class="num"><strong>413.5 s</strong></td></tr>
+          <tr><th>Range</th><td class="num">20.5–73.0 s</td><td class="num">227.2–485.2 s</td></tr>
+          <tr><th>Verified</th><td class="num"><span class="pill ok">6 / 6</span></td><td class="num"><span class="pill ok">5 / 5 usable</span></td></tr>
+          <tr><th>Steps</th><td class="num">6–13</td><td class="num">6–7</td></tr>
+          <tr><th>Schema errors</th><td class="num">0 / 48</td><td class="num"><span class="pill bad">4 / 29</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>A factor of 12.7, against 4.6 on decode.</strong> The step count did not explode — it is
+      if anything lower. The cost is at the turn boundaries: a repair run is six or seven turns, and every
+      turn re-prefills the grown context with experts that are cold again. The prerouter predicts one step
+      ahead <em>inside</em> a decode loop; nothing carries across a turn.</p>
+    </div>
+
+    <div class="callout key">
+      <div class="label">The same shape as Finding 13, from the other side</div>
+      <p>There, six tools cost nothing and the context split cost everything. Here the tokens are cheap
+      and the turns are expensive. Both say one thing: <strong>on an agentic workload, measure turns, not
+      tokens.</strong> Anyone sizing a streaming runtime from its published decode figure will
+      underestimate agentic latency by roughly 3×.</p>
+    </div>
+
+    <div class="col">
+      <h3>Three things the vendor numbers do not say</h3>
+      <p><strong>Peak memory ran 44 % over the published figure.</strong> 2.9 GiB claimed, 3.29 GiB on the
+      first run and 4.19 GiB once the expert cache warmed. The published number looks like a best case,
+      not an operating point. Decode, by contrast, came in <em>above</em> spec — 19.5 tok/s against
+      14.9–17.7 — because the benchmark machine was an M4 Pro.</p>
+      <p><strong>There is no tool calling.</strong> <code>ChatRequest</code> has no <code>tools</code>
+      field and <code>finish_reason</code> is hardcoded to <code>"stop"</code>; the only two occurrences
+      of <code>tool_call</code> in the entire source are in the 8B engine, one of them literally
+      <code>tools=None</code>. The model can do it — its chat template knows the format — but the server
+      never passes the definitions through. Measuring <code>repair_task</code> at all required a shim that
+      renders the tools block into the prompt exactly as <code>chat_template.jinja</code> lines 45–53
+      would and parses the reply back; its rendering was verified byte-identical against the template
+      before any number was taken. As shipped, edge0 cannot drive OpenCode.</p>
+      <p><strong>Qwen3.6 no longer uses the JSON tool format.</strong> It is now nested XML —
+      <code>&lt;tool_call&gt;&lt;function=name&gt;&lt;parameter=key&gt;value&lt;/parameter&gt;&lt;/function&gt;&lt;/tool_call&gt;</code>
+      — and the template wants <code>arguments</code> as a <em>dict</em>, so replaying an OpenAI-shaped
+      history straight back into it raises <code>TypeError: Can only get item pairs from a mapping</code>.
+      A parser from the Qwen3 era silently finds zero tool calls.</p>
+
+      <h3>Two findings that are not about edge0</h3>
+      <p>The four schema errors are the model's, not the shim's. Across every logged raw reply the model
+      emitted <code>&lt;parameter=command&gt;</code> nine times, <code>&lt;parameter=content&gt;</code>
+      three times and <code>&lt;parameter=filePath&gt;</code> <strong>once</strong> — in two of three
+      <code>write</code> calls the required path was never generated. The one well-formed call parsed in
+      full, multi-line Python and escaped quotes included. Against 0 / 48 for the 3-bit baseline on the
+      same base model that is a real regression, though this run cannot separate int4 from the adapters
+      as its cause.</p>
+      <p>And four of nine runs never produced a number at all, because the model invented a
+      <code>read</code> tool and <code>bench/agentlib.py</code> did this:</p>
+    </div>
+
+<pre><code>spec = next(t["function"] for t in TOOLS if t["function"]["name"] == name)</code></pre>
+
+    <div class="col">
+      <p><code>next()</code> without a default raises <code>StopIteration</code> on an unknown name and
+      takes the whole run with it — while the <code>return "ERROR: unknown tool"</code> at the bottom of
+      that same function, written for exactly this case, is unreachable. Every model measured before this
+      one stuck to the declared tools, so the bug sat there unseen. It is fixed now; the numbers above
+      come from the unfixed harness, which is why they are reported as 5 usable runs out of 9.</p>
+
+      <h3>Verdict</h3>
+      <p>Unchanged from Finding 9, but now quantified. On 24 GB this is the wrong trade: the 35B MoE
+      already runs at 17.4 GB with a 32.5 s median, and paying 12.7× the wall-clock to free memory that
+      is not scarce is not a bargain. On 8 or 16 GB, where the alternative is not running a 35B at all,
+      the same arithmetic reads entirely differently — and that is the hardware edge0 is built for.</p>
+      <p>Both sides are reproducible from this repo: <code>bench/edge0_tool_proxy.py</code> is the shim,
+      <code>bench/edge0_native_bench.py</code> the native control.</p>
     </div>
   </section>
 
@@ -1659,7 +1789,18 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
           after 251 seconds. Recovery is possible — just not reliable.</p>
         </div>
       </div>
-    </div>
+          <div class="entry">
+        <div class="stamp">—</div>
+        <div class="col">
+          <h4>"LM Studio's guardrail mode is an inverted high / low"</h4>
+          <p>Published. The enum is <code>off</code> / <code>relaxed</code> / <code>balanced</code> /
+          <code>strict</code> / <code>custom</code>; <code>"high"</code> fails the schema and falls
+          through to the default, so the setting I had been reading as "permissive" was configuring
+          nothing at all. Read the app bundle, not the settings file.</p>
+        </div>
+      </div>
+</div>
+
 
     <div class="col">
       <h3>The pattern</h3>
