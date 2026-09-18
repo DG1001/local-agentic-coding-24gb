@@ -2,7 +2,7 @@
 
 *Field notes — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Eight models, 434 tool calls, six to twelve identical runs per configuration. Every model aced the
+Nine models, 530 tool calls, six to twelve identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
 desktop as the only warning macOS ever gave, and sixteen confident conclusions I had to
@@ -1202,5 +1202,6 @@ configuration against a second model — took eleven minutes when I finally ran 
 
 ---
 
-*All numbers measured on one machine on one day. Six runs per configuration — enough to
-tell 3/6 from 6/6, not enough to tell 5/6 from 6/6.*
+*Findings 1–14 measured on one machine on one day; Finding 15 in a later session on the
+same machine and OS build. Six runs per configuration — enough to tell 3/6 from 6/6, not
+enough to tell 5/6 from 6/6, and not enough to separate two medians 30 s apart.*

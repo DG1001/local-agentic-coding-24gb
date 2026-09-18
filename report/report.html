@@ -2053,10 +2053,16 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
   <hr class="rule">
 
   <footer>
-    <p>All numbers measured on one machine on one day: Apple M5 Pro, 24 GB, macOS 26.6 build 25G72,
-    LM Studio 0.4.20 with the MLX runtime. Models: <code>mlx-community/gpt-oss-20b-MXFP4-Q8</code>,
+    <p>Findings 1–14 were measured on one machine on one day: Apple M5 Pro, 24 GB, macOS 26.6 build
+    25G72, LM Studio 0.4.20 with the MLX runtime. Models:
+    <code>mlx-community/gpt-oss-20b-MXFP4-Q8</code>,
     <code>mlx-community/mistralai_Devstral-Small-2-24B-Instruct-2512-MLX-MXFP4</code>,
     <code>NexVeridian/Qwen3.6-35B-A3B-3bit</code>.</p>
+    <p>Finding 15 is a later session on the same machine and OS build, and is the one row here that does
+    not run on LM Studio: <code>prism-ml/Ternary-Bonsai-2-27B-gguf</code>, both the
+    <code>PTQ1_0</code> and <code>PQ2_0</code> packings, served by the PrismML llama.cpp fork
+    <code>prism-b10685-7dffb15</code> with <code>GGML_METAL_TENSOR_DISABLE=1</code>. Its comparison row,
+    Qwen3.8-27B UD-IQ4_XS, was re-measured in the same session for the throughput figures.</p>
     <p>The harness was a ~180-line Python loop talking directly to the OpenAI-compatible endpoint,
     validating tool arguments against the declared schema itself. It exists because the coding agent had
     to be ruled out as a variable — which, twice, it turned out to be. The repair task used the same loop

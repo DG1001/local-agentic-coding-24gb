@@ -1,5 +1,5 @@
 {
-  "_comment": "Raw numbers from the 30/31 July 2026 series. One machine, one day. Six runs per configuration unless noted otherwise.",
+  "_comment": "Raw numbers from the 30/31 July 2026 series, plus the Ternary-Bonsai-2-27B rows measured 18 September 2026 on the same machine and OS build. One machine. Six runs per configuration unless noted otherwise.",
   "machine": {
     "model": "Apple M5 Pro",
     "cores": 15,
