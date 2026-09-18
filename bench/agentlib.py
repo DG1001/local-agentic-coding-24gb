@@ -3,9 +3,9 @@
 schema itself -- that is the actual error measurement.
 
 Configuration through environment variables:
-  LLM_URL, MAX_TOK, TEMP, TOP_P, TOP_K, REP_PEN
+  LLM_URL, MAX_TOK, TEMP, TOP_P, TOP_K, REP_PEN, NO_CAFFEINATE
 """
-import json, os, subprocess, sys, urllib.request
+import atexit, json, os, subprocess, sys, urllib.request
 
 URL = os.environ.get("LLM_URL", "http://127.0.0.1:1234/v1/chat/completions")
 REQ_TIMEOUT = int(os.environ.get("REQ_TIMEOUT", "300"))
@@ -28,6 +28,34 @@ TOOLS = [
             "content": {"type": "string", "description": "Full content to write"}},
             "required": ["filePath", "content"]}}},
 ]
+
+
+def keep_awake():
+    """Hold macOS awake for the length of the run. Call once, from main().
+
+    An unattended run is otherwise measuring the sleep scheduler, not the model:
+    macOS enters Idle Sleep on AC with TCPKeepAlive active, because a saturated
+    GPU does not count as user activity. It then cycles 900 s asleep / ~45 s
+    DarkWake, which shows up as individual requests stalling at a suspiciously
+    round ~900 s while steady-state throughput looks perfectly normal. See
+    Finding 15 -- it cost a full set of six runs.
+
+    `-w <our pid>` ties caffeinate's lifetime to this process, so the assertion
+    is released on exit, on a crash and on Ctrl-C alike. Returns the Popen, or
+    None when the assertion was not taken (non-macOS, opted out, or no binary).
+    """
+    if sys.platform != "darwin" or os.environ.get("NO_CAFFEINATE"):
+        return None
+    try:
+        p = subprocess.Popen(["caffeinate", "-dimsu", "-w", str(os.getpid())])
+    except (FileNotFoundError, OSError) as e:
+        print(f"  warning: could not hold the machine awake ({e}); "
+              f"an unattended run may measure sleep cycles instead of the model",
+              file=sys.stderr, flush=True)
+        return None
+    atexit.register(p.terminate)
+    print("  holding the machine awake (caffeinate -dimsu)", flush=True)
+    return p
 
 
 def post(payload):

@@ -3,6 +3,9 @@
 
 Usage: realagent.py <model> <workdir> [maxsteps]
 
+Holds the machine awake for the length of the run (NO_CAFFEINATE=1 opts out);
+without that an unattended series measures macOS sleep cycles -- see Finding 15.
+
 Verification is the test suite itself, not a string comparison. It additionally
 checks that the tests stayed byte-identical -- editing them is the obvious
 shortcut.
@@ -46,6 +49,7 @@ def tests_untouched(workdir):
 def main():
     model, workdir = sys.argv[1], sys.argv[2]
     maxsteps = int(sys.argv[3]) if len(sys.argv) > 3 else 30
+    A.keep_awake()
 
     if os.path.exists(workdir):
         shutil.rmtree(workdir)

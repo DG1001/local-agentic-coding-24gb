@@ -16,8 +16,12 @@ same thing:
 
     cp edge0_native_bench.py ~/path/to/Edge0/
     BENCH_LONG=1 .venv/bin/python edge0_native_bench.py models/edge0-35b
+
+Holds the machine awake for the length of the run (NO_CAFFEINATE=1 opts out).
+Deliberately self-contained -- this file is copied into the edge0 checkout and
+run from their venv, so it cannot import agentlib.
 """
-import argparse, os, sys, time
+import argparse, atexit, os, subprocess, sys, time
 
 import mlx.core as mx
 from mlx_lm import load, stream_generate
@@ -28,6 +32,27 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 from bench import _long_prompt, DEFAULT_PROMPT, PROMPTS  # same prompts
 
 
+def keep_awake():
+    """Hold macOS awake for the run; see agentlib.keep_awake and Finding 15.
+
+    Without it an unattended series measures macOS sleep cycles, not the model:
+    a saturated GPU does not count as user activity, so the machine enters Idle
+    Sleep and cycles 900 s asleep / ~45 s DarkWake. `-w <our pid>` releases the
+    assertion on exit, crash and Ctrl-C alike.
+    """
+    if sys.platform != "darwin" or os.environ.get("NO_CAFFEINATE"):
+        return None
+    try:
+        p = subprocess.Popen(["caffeinate", "-dimsu", "-w", str(os.getpid())])
+    except (FileNotFoundError, OSError) as e:
+        print(f"[native] warning: could not hold the machine awake ({e})",
+              file=sys.stderr, flush=True)
+        return None
+    atexit.register(p.terminate)
+    print("[native] holding the machine awake (caffeinate -dimsu)", flush=True)
+    return p
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("model")
@@ -35,6 +60,7 @@ def main():
     ap.add_argument("--warmup", type=int, default=10)
     ap.add_argument("--runs", type=int, default=2)
     a = ap.parse_args()
+    keep_awake()
 
     prompt = (os.environ.get("BENCH_PROMPT") or
               (_long_prompt() if os.environ.get("BENCH_LONG") == "1"

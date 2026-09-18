@@ -11,7 +11,7 @@ passed, with the long one only a single model did.
 Usage: miniagent.py <model> <workdir> <small|large> [maxsteps]
 
 Configuration through environment variables, see agentlib.py:
-    LLM_URL, MAX_TOK, TEMP, TOP_P, TOP_K, REP_PEN
+    LLM_URL, MAX_TOK, TEMP, TOP_P, TOP_K, REP_PEN, NO_CAFFEINATE
 TOP_K=0 omits top_p/top_k/repetition_penalty entirely -- that reproduces the
 broken sampling configuration from the report.
 """
@@ -65,6 +65,7 @@ def check_task(workdir):
 def main():
     model, workdir, size = sys.argv[1], sys.argv[2], sys.argv[3]
     maxsteps = int(sys.argv[4]) if len(sys.argv) > 4 else 15
+    A.keep_awake()
     os.makedirs(workdir, exist_ok=True)
 
     msgs = [{"role": "system", "content": SYS_SMALL if size == "small" else SYS_LARGE},
