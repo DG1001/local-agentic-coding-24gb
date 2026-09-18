@@ -396,7 +396,7 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Nine models, 486 tool calls, six to twelve identical runs per configuration. Every model
+    <p class="standfirst">Nine models, 530 tool calls, six to twelve identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
@@ -1606,42 +1606,51 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
 
   <section id="ternary">
     <div class="col">
-      <h2><span class="num">Finding 15</span>Ternary at 1.75 bits: 59 % of the memory, 34 % more wall-clock</h2>
+      <h2><span class="num">Finding 15</span>Ternary at under 2.2 bits: 63 % of the memory, 20 % more wall-clock</h2>
       <p>Every quantisation comparison above changed two things at once — a different model <em>and</em> a
       different bit-width. <a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf">Ternary
       Bonsai 2 27B</a> (PrismML, Apache-2.0) removes that confound. It is a ternary build of <strong>the
       same Qwen3.8-27B</strong> that already holds a row here: weights in {−1, 0, +1} with FP16 group-wise
-      scales, packed as <code>PTQ1_0</code> at 1.75 bits/weight, in a Hadamard-rotated basis. Same base
-      model, same harness, same 16k context, same sampling. Only the bit-width differs.</p>
+      scales, in a Hadamard-rotated basis. Same base model, same harness, same 16k context, same sampling.
+      Only the bit-width differs.</p>
+      <p>It ships in two packings of those identical values, and both got the full six runs:
+      <code>PTQ1_0</code> packs trits densely at 1.75 bits/weight and 5.95 GB, <code>PQ2_0</code> gives
+      each trit its own 2-bit slot at 2.13 bits/weight and 7.21 GB. The table below leads with
+      <code>PQ2_0</code>, which turned out to be the one to use; the section on packings explains why, and
+      why that was worth checking rather than assuming.</p>
       <p><code>kvcalc</code> reads the hybrid backbone correctly — 16 of 64 layers on full attention, 64
-      KB/token — and predicted 9.52 GB at 16k (5.95 weights + 1.07 KV + 2.5 overhead). Measured peak:
-      <strong>10.31 GB</strong>.</p>
+      KB/token — and predicted 9.52 GB at 16k for <code>PTQ1_0</code> (5.95 weights + 1.07 KV + 2.5
+      overhead). Measured peak: <strong>10.31 GB</strong>.</p>
     </div>
 
     <div class="tablewrap">
       <table>
         <caption>Same base model, same harness, same context — only the bit-width differs</caption>
-        <thead><tr><th></th><th class="num">Ternary Bonsai 2</th><th class="num">Qwen3.8-27B UD-IQ4_XS</th></tr></thead>
+        <thead><tr><th></th><th class="num">Ternary Bonsai 2 <code>PQ2_0</code></th><th class="num">Qwen3.8-27B UD-IQ4_XS</th></tr></thead>
         <tbody>
-          <tr><th>Bits per weight</th><td class="num"><strong>1.75</strong></td><td class="num">~4.25</td></tr>
-          <tr><th>Weights</th><td class="num"><strong>5.95 GB</strong></td><td class="num">14.25 GB</td></tr>
-          <tr><th>Wired peak</th><td class="num"><strong>10.31 GB</strong> (43 %)</td><td class="num">17.42 GB (73 %)</td></tr>
-          <tr><th>Repair task, median</th><td class="num">284.5 s</td><td class="num"><strong>211.9 s</strong></td></tr>
-          <tr><th>Range</th><td class="num">257.9–434.3 s</td><td class="num">180.4–261.9 s</td></tr>
+          <tr><th>Bits per weight</th><td class="num"><strong>2.13</strong></td><td class="num">~4.25</td></tr>
+          <tr><th>Weights</th><td class="num"><strong>7.21 GB</strong></td><td class="num">14.25 GB</td></tr>
+          <tr><th>Wired peak</th><td class="num"><strong>10.92 GB</strong> (45 %)</td><td class="num">17.42 GB (73 %)</td></tr>
+          <tr><th>Repair task, median</th><td class="num">254.2 s</td><td class="num"><strong>211.9 s</strong></td></tr>
+          <tr><th>Range</th><td class="num">176.5–340.1 s</td><td class="num">180.4–261.9 s</td></tr>
           <tr><th>Verified</th><td class="num"><span class="pill ok">6 / 6</span></td><td class="num"><span class="pill ok">6 / 6</span></td></tr>
-          <tr><th>Steps</th><td class="num">7–10</td><td class="num">5–7</td></tr>
-          <tr><th>Schema errors</th><td class="num">0 / 52</td><td class="num">0 / 39</td></tr>
+          <tr><th>Steps</th><td class="num">5–9</td><td class="num">5–7</td></tr>
+          <tr><th>Schema errors</th><td class="num">0 / 44</td><td class="num">0 / 39</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="col">
-      <p><strong>The reliability survives the compression.</strong> Six of six, zero malformed tool calls
-      in 52, the test file byte-identical every time. Sub-4-bit builds are supposed to collapse on exactly
+      <p><strong>The reliability survives the compression.</strong> Six of six on both packings, zero
+      malformed tool calls in 96 across the two, the test file byte-identical every time. Sub-4-bit builds are supposed to collapse on exactly
       this — tool-call formatting and instruction-following under a long context — and this one does not.
       That is the result worth having.</p>
 
+    </div>
+
+    <div class="col">
       <h3>The cost is entirely in the prefill</h3>
+      <p>Measured first on <code>PTQ1_0</code>, the dense packing:</p>
     </div>
 
     <div class="tablewrap">
@@ -1649,7 +1658,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
         <caption>Throughput on an identical 7,120-token prompt, cold, both on llama.cpp</caption>
         <thead><tr><th></th><th class="num">prefill</th><th class="num">decode</th></tr></thead>
         <tbody>
-          <tr><th>Ternary Bonsai 2</th><td class="num"><strong>88.8 tok/s</strong></td><td class="num"><strong>21.3 tok/s</strong></td></tr>
+          <tr><th>Ternary Bonsai 2, <code>PTQ1_0</code></th><td class="num"><strong>88.8 tok/s</strong></td><td class="num"><strong>21.3 tok/s</strong></td></tr>
           <tr><th>Qwen3.8-27B UD-IQ4_XS</th><td class="num">251.6 tok/s</td><td class="num">16.9 tok/s</td></tr>
           <tr><th>ratio</th><td class="num"><span class="pill bad">2.8× slower</span></td><td class="num"><span class="pill ok">1.26× faster</span></td></tr>
         </tbody>
@@ -1657,22 +1666,72 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
     </div>
 
     <div class="col">
-      <p>The benchmark's own 48 requests agree: prefill median 85.7 tok/s (70.6–90.4), decode median
-      21.7 (19.8–22.9).</p>
+      <p>The benchmark's own 48 requests agree: prefill median 85.7 tok/s (70.6–90.4), decode median 21.7
+      (19.8–22.9).</p>
       <p>Ternary weights are tiny to <em>move</em> and no cheaper to <em>multiply</em>. Decode is
       bandwidth-bound, so it gains; prefill is compute-bound and the packed format has to be unpacked on
       the way in, so it loses — and loses by more than decode gains. Finding 13 and Finding 14 both landed
       on the same rule from other directions, and it applies again here: <strong>on an agentic workload
-      the turns are the cost</strong>, and a turn is a prefill of the whole grown history. The step count
-      moved the wrong way too (7–10 against 5–7), which compounds it.</p>
+      the turns are the cost</strong>, and a turn is a prefill of the whole grown history. A 1.26× decode
+      advantage cannot pay for a 2.8× prefill deficit when the loop re-prefills everything on every
+      step.</p>
+
+      <h3>Which packing — and the answer to the obvious objection</h3>
+      <p>There is an obvious objection to all of that. If the gap is the <em>unpacking</em>, then it is a
+      property of this file, not of ternary weights — and PrismML ships a second packing of the identical
+      values precisely to make unpacking cheaper. <code>PTQ1_0</code> packs trits densely and lands near
+      the information-theoretic floor — a trit is log₂3 = 1.585 bits — at 1.75 bits/weight and 5.95 GB,
+      but extracting one costs real arithmetic. <code>PQ2_0</code> gives each trit its own 2-bit slot:
+      2.13 bits/weight, 7.21 GB, and unpacking is a shift and a mask. Their own model card says neither is
+      uniformly faster.</p>
+      <p>So <code>PQ2_0</code> got the identical six runs.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>The same ternary values, two packings, against the 4-bit row</caption>
+        <thead><tr><th></th><th class="num"><code>PTQ1_0</code></th><th class="num"><code>PQ2_0</code></th><th class="num">UD-IQ4_XS</th></tr></thead>
+        <tbody>
+          <tr><th>Weights</th><td class="num"><strong>5.95 GB</strong></td><td class="num">7.21 GB</td><td class="num">14.25 GB</td></tr>
+          <tr><th>Wired peak</th><td class="num"><strong>10.31 GB</strong> (43 %)</td><td class="num">10.92 GB (45 %)</td><td class="num">17.42 GB (73 %)</td></tr>
+          <tr><th>Prefill</th><td class="num">88.8 tok/s</td><td class="num">103.9 tok/s</td><td class="num"><strong>251.6 tok/s</strong></td></tr>
+          <tr><th>Decode</th><td class="num">21.3 tok/s</td><td class="num"><strong>23.6 tok/s</strong></td><td class="num">16.9 tok/s</td></tr>
+          <tr><th>Median</th><td class="num">284.5 s</td><td class="num">254.2 s</td><td class="num"><strong>211.9 s</strong></td></tr>
+          <tr><th>Range</th><td class="num">257.9–434.3 s</td><td class="num">176.5–340.1 s</td><td class="num">180.4–261.9 s</td></tr>
+          <tr><th>Verified</th><td class="num"><span class="pill ok">6 / 6</span></td><td class="num"><span class="pill ok">6 / 6</span></td><td class="num"><span class="pill ok">6 / 6</span></td></tr>
+          <tr><th>Steps</th><td class="num">7–10</td><td class="num">5–9</td><td class="num">5–7</td></tr>
+          <tr><th>Schema errors</th><td class="num">0 / 52</td><td class="num">0 / 44</td><td class="num">0 / 39</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>The objection does not survive, but it does not fully fail either.</strong>
+      <code>PQ2_0</code> is 17 % faster on prefill — real, and not enough. 103.9 tok/s against 251.6 closes
+      a sixth of the gap and leaves 2.4×. The prefill penalty is a property of the ternary matmul, not of
+      the dense packing.</p>
+      <p><strong>What did surprise me is that there is no trade-off between the two packings at all.</strong>
+      <code>PQ2_0</code> moves 21 % more weight bytes per token, so decode should have paid for the cheaper
+      unpacking. It did not — decode went <em>up</em> too, 21.7 → 24.7 tok/s per-request median, with
+      distributions that do not overlap (19.8–22.9 against 23.6–25.8). Unpacking is on the critical path in
+      both directions. <code>PQ2_0</code> simply dominates for 0.52 GB.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="label">A caveat on the wall-clock column</div>
+      <p>The per-request throughput difference is solid: 43–48 samples per side, and decode does not
+      overlap. The 30 s gap between the two end-to-end medians is not. At n = 6 the ranges overlap heavily
+      and step count — 5 to 10, set by how quickly the model commits to an edit — dominates the variance.
+      Directionally consistent with the throughput, not separated by it.</p>
     </div>
 
     <div class="callout key">
       <div class="label">The trade, stated plainly</div>
-      <p>41 % of the memory back for 34 % more wall-clock, at identical verified reliability. On this
-      machine that is a poor deal — 17.42 GB already fits in 24 GB, so the freed memory buys nothing. It
-      becomes a good deal exactly where 14.25 GB does not fit: a 16 GB Mac, where the IQ4_XS row is not an
-      option at all. Same shape as Finding 14's verdict about edge0, one bit-width down.</p>
+      <p>37 % of the memory back for 20 % more wall-clock, at identical verified reliability, taking
+      <code>PQ2_0</code> — the better of the two packings. On this machine that is a poor deal: 17.42 GB
+      already fits in 24 GB, so the freed memory buys nothing. It becomes a good deal exactly where
+      14.25 GB does not fit — a 16 GB Mac, where the IQ4_XS row is not an option at all. Same shape as
+      Finding 14's verdict about edge0, one bit-width down.</p>
     </div>
 
     <div class="col">
@@ -1762,7 +1821,8 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
           <tr><th>Devstral-Small-2507 4-bit</th><td class="num">13.26 GB</td><td class="num">~17.5 GB</td><td class="num">73 %</td><td><span class="pill mid">check its KV first</span></td></tr>
           <tr><th>Devstral-Small-2-24B MXFP4</th><td class="num">14.39 GB</td><td class="num">16.25 GB <em>meas.</em></td><td class="num">68 %</td><td><span class="pill bad">4,864 ctx ceiling</span></td></tr>
           <tr><th>Qwen3.8-27B UD-IQ4_XS <em>gguf</em></th><td class="num">14.25 GB</td><td class="num">17.42 GB <em>meas.</em></td><td class="num">73 %</td><td><span class="pill ok">6/6, but 4x slower</span></td></tr>
-          <tr><th>Ternary Bonsai 2 27B <em>gguf, 1.75-bit</em></th><td class="num">5.95 GB</td><td class="num">10.31 GB <em>meas.</em></td><td class="num">43 %</td><td><span class="pill ok">6/6, needs the PrismML fork</span></td></tr>
+          <tr><th>Ternary Bonsai 2 27B <em>gguf, PTQ1_0</em></th><td class="num">5.95 GB</td><td class="num">10.31 GB <em>meas.</em></td><td class="num">43 %</td><td><span class="pill ok">6/6, needs the PrismML fork</span></td></tr>
+          <tr><th>Ternary Bonsai 2 27B <em>gguf, PQ2_0</em></th><td class="num">7.21 GB</td><td class="num">10.92 GB <em>meas.</em></td><td class="num">45 %</td><td><span class="pill ok">6/6, the faster packing</span></td></tr>
           <tr><th>Qwen3.8-27B UD-Q4_K_M <em>gguf</em></th><td class="num">16.46 GB</td><td class="num">~20 GB</td><td class="num">83 %</td><td><span class="pill bad">same band as the guardrail block</span></td></tr>
           <tr><th>Devstral-Small-2-24B 4-bit</th><td class="num">15.10 GB</td><td class="num">—</td><td class="num">—</td><td><span class="pill bad">worse ceiling</span></td></tr>
           <tr><th>Qwen3.6-35B-A3B 3-bit</th><td class="num">15.20 GB</td><td class="num">19.29 GB <em>meas.</em></td><td class="num">80 %</td><td><span class="pill bad">3/6 under load</span></td></tr>
@@ -1979,10 +2039,11 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
         spanning twenty files, or a codebase that does not fit in 32k of context.</li>
         <li>Whether large tool-call arguments really drive the schema-failure risk. One occurrence in
         128 is a hypothesis, not a result.</li>
-        <li>Whether the ternary prefill penalty is inherent or just kernel maturity.
-        <code>PQ2_0</code> stores each trit in a 2-bit slot precisely to make unpacking cheaper, and
-        PrismML says neither packing is uniformly faster. Only <code>PTQ1_0</code> was measured here, so
-        the 2.8× prefill gap may be a packing choice rather than a property of ternary weights.</li>
+        <li>Whether a ternary prefill can be made competitive at all. <code>PQ2_0</code> answered the
+        narrow version of this — the penalty is not the dense packing, since cheaper unpacking bought only
+        17 % and left 2.4×. Whether it is the Hadamard activation transform, the hybrid attention kernels,
+        or ternary matmul itself is unmeasured, and separating them needs a profiler rather than another
+        download.</li>
         <li>Whether the same 1.75-bit build behaves this way on a Mac where Metal compiles cleanly.
         Finding 15 ran with the M5 tensor API disabled, which is a workaround, not a baseline.</li>
       </ul>

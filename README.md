@@ -3,7 +3,7 @@
 Measurements and tooling for one question: which local model is actually usable for
 agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Nine models, 486 tool calls, six to twelve identical runs per configuration, measured on an Apple
+Nine models, 530 tool calls, six to twelve identical runs per configuration, measured on an Apple
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
@@ -25,7 +25,8 @@ send.
 | gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6**, 55 s median | 67 % |
 | Qwen3.8-27B IQ4_XS | 14.25 GB | llama.cpp | **6/6**, 212 s median | 73 % |
 | Qwen3.8-27B IQ4_XS, no thinking | 14.25 GB | llama.cpp | 11/12, **113 s median** | 71 % |
-| **Ternary Bonsai 2 27B** (1.75-bit) | **5.95 GB** | llama.cpp (PrismML fork) | **6/6**, 285 s median | **43 %** |
+| **Ternary Bonsai 2 27B** `PQ2_0` (2.13-bit) | **7.21 GB** | llama.cpp (PrismML fork) | **6/6**, 254 s median | **45 %** |
+| Ternary Bonsai 2 27B `PTQ1_0` (1.75-bit) | **5.95 GB** | llama.cpp (PrismML fork) | **6/6**, 285 s median | **43 %** |
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6**, 57 s median | **39 %** |
 | Nanbeige4.2-3B Q4_K_M | **2.68 GB** | llama.cpp (upstream) | 5/6, 62 s median | 47 % |
 | Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6, 156 s median | 51 % |
@@ -55,12 +56,17 @@ effect at 128 GB. (Turning its reasoning block off halves that to 113 s over twe
 at 11/12 instead of 6/6 — see the report.)
 
 **Ternary quantisation keeps the reliability and spends it on prefill.** Ternary Bonsai 2
-27B is the *same* Qwen3.8-27B at 1.75 bits/weight — 5.95 GB instead of 14.25 GB. It also
-scores 6/6, with zero malformed tool calls in 52, at **43 % of memory instead of 73 %**.
-The bill arrives in the median: 285 s against 212 s. Decode is 1.28× *faster* (tiny weights
-to move), prefill is 2.8× slower (the same 27B to multiply, plus unpacking), and on an
-agent loop prefill is what every turn pays. At 24 GB that is a poor trade, because 14.25 GB
-already fits. At 16 GB, where it does not, the arithmetic inverts.
+27B is the *same* Qwen3.8-27B at under 2.2 bits/weight — 7.21 GB instead of 14.25 GB. It
+also scores 6/6, with zero malformed tool calls in 96 across both packings, at **45 % of
+memory instead of 73 %**. The bill arrives in the median: 254 s against 212 s. Decode is
+1.40× *faster* (tiny weights to move), prefill is 2.4× slower (the same 27B to multiply,
+plus unpacking), and on an agent loop prefill is what every turn pays. At 24 GB that is a
+poor trade, because 14.25 GB already fits. At 16 GB, where it does not, it inverts.
+
+**Take the bigger ternary file.** The two packings hold identical weights; `PQ2_0` spends
+0.52 GB more wired to make unpacking a shift and a mask instead of arithmetic, and is
+faster on prefill *and* decode for it. I expected the extra weight traffic to cost decode.
+It did not — there is no trade-off curve between them, just a dominated option.
 
 **And for five of nine models, the inference engine decided usability.** MLX capped
 Devstral's context at 4,864, refused to load Qwen3.6-27B at all, and broke on Gemma's

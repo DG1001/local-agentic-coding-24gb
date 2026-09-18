@@ -914,6 +914,100 @@
           "wall_s": 273.5
         }
       ]
+    },
+    "Ternary-Bonsai-2-27B-PQ2_0": {
+      "_comment": "The second GGUF packing of the SAME ternary weights as Ternary-Bonsai-2-27B-PTQ1_0 -- identical {-1,0,+1} values, each trit in its own 2-bit slot instead of densely packed. Run to test whether the prefill penalty is inherent to ternary or an artifact of the dense packing's unpack arithmetic.",
+      "runtime": "llama.cpp (GGUF) via the PrismML fork prism-b10685-7dffb15, GGML_METAL_TENSOR_DISABLE=1",
+      "quant": "PrismML PQ2_0 ternary, one trit per 2-bit slot",
+      "bits_per_weight": 2.13,
+      "weights_gb": 7.21,
+      "context_granted": 16384,
+      "parallel": 1,
+      "passed": 6,
+      "of": 6,
+      "median_s": 254.2,
+      "range_s": [
+        176.5,
+        340.1
+      ],
+      "tool_calls": 44,
+      "schema_errors": 0,
+      "tests_untouched": "6/6",
+      "wired_peak_gb": 10.92,
+      "prefill_tok_s": {
+        "median": 101.8,
+        "min": 58.2,
+        "max": 106.2,
+        "n": 43,
+        "paired_7120_token_prompt": 103.9
+      },
+      "decode_tok_s": {
+        "median": 24.7,
+        "min": 23.6,
+        "max": 25.8,
+        "n": 43,
+        "paired_7120_token_prompt": 23.6
+      },
+      "thinking": true,
+      "delta_vs_PTQ1_0": {
+        "prefill": "88.8 -> 103.9 tok/s on the paired prompt (1.17x); per-request medians 85.7 -> 101.8",
+        "decode": "21.3 -> 23.6 tok/s paired (1.11x); per-request medians 21.7 -> 24.7, distributions do not overlap",
+        "wired_peak_gb": "10.31 -> 10.92",
+        "median_s": "284.5 -> 254.2",
+        "caveat": "The per-request throughput gain is solid (43-48 samples per side, non-overlapping on decode). The 30 s end-to-end median gap is NOT: at n=6 the wall-clock ranges overlap heavily (257.9-434.3 vs 176.5-340.1) and step count, which varies 5-10, dominates the variance. Directionally consistent, not separated.",
+        "verdict": "PQ2_0 dominates PTQ1_0 on speed for 0.52 GB more memory -- there is no trade-off curve between the two packings, contrary to expectation that the extra weight traffic would cost decode."
+      },
+      "answers_open_question": "No. At 103.9 tok/s prefill against the IQ4_XS row's 251.6, the cheaper packing closes 17% of a 2.8x gap and leaves 2.4x. The ternary prefill penalty is a property of the matmul, not of the dense packing.",
+      "runs": [
+        {
+          "steps": 7,
+          "bash": 7,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 226.3
+        },
+        {
+          "steps": 5,
+          "bash": 4,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 308.7
+        },
+        {
+          "steps": 6,
+          "bash": 5,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 176.5
+        },
+        {
+          "steps": 9,
+          "bash": 8,
+          "write": 2,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 340.1
+        },
+        {
+          "steps": 7,
+          "bash": 6,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 214.4
+        },
+        {
+          "steps": 7,
+          "bash": 6,
+          "write": 2,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 282.1
+        }
+      ]
     }
   },
   "kv_cache": {

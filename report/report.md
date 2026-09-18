@@ -960,59 +960,110 @@ hardware edge0 is built for.
 
 ---
 
-## Finding 15 — Ternary at 1.75 bits: 59 % of the memory, 34 % more wall-clock
+## Finding 15 — Ternary at under 2.2 bits: 63 % of the memory, 20 % more wall-clock
 
 Every quantisation comparison in this report so far changed two things at once — a
 different model *and* a different bit-width. [Ternary Bonsai 2
 27B](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf) (PrismML, Apache-2.0)
 removes that confound. It is a ternary build of **the same Qwen3.8-27B** that already
-holds a row here: weights in {−1, 0, +1} with FP16 group-wise scales, packed as `PTQ1_0`
-at 1.75 bits/weight, in a Hadamard-rotated basis. Same base model, same harness, same
-16k context, same sampling. Only the bit-width differs.
+holds a row here: weights in {−1, 0, +1} with FP16 group-wise scales, in a Hadamard-rotated
+basis. Same base model, same harness, same 16k context, same sampling. Only the bit-width
+differs.
+
+It ships in two packings of those identical values, and both got the full six runs:
+`PTQ1_0` packs trits densely at 1.75 bits/weight and 5.95 GB, `PQ2_0` gives each trit its
+own 2-bit slot at 2.13 bits/weight and 7.21 GB. The table below leads with `PQ2_0`, which
+turned out to be the one to use; the section on packings explains why, and why that was
+worth checking rather than assuming.
 
 `kvcalc` reads the hybrid backbone correctly — 16 of 64 layers on full attention, 64
-KB/token — and predicted 9.52 GB at 16k (5.95 weights + 1.07 KV + 2.5 overhead). Measured
-peak: **10.31 GB**.
+KB/token — and predicted 9.52 GB at 16k for `PTQ1_0` (5.95 weights + 1.07 KV + 2.5
+overhead). Measured peak: **10.31 GB**.
 
-| | Ternary Bonsai 2 | Qwen3.8-27B UD-IQ4_XS |
+| | Ternary Bonsai 2 `PQ2_0` | Qwen3.8-27B UD-IQ4_XS |
 |---|---:|---:|
-| Bits per weight | **1.75** | ~4.25 |
-| Weights | **5.95 GB** | 14.25 GB |
-| Wired peak | **10.31 GB** (43 %) | 17.42 GB (73 %) |
-| Repair task, median | 284.5 s | **211.9 s** |
-| Range | 257.9–434.3 s | 180.4–261.9 s |
+| Bits per weight | **2.13** | ~4.25 |
+| Weights | **7.21 GB** | 14.25 GB |
+| Wired peak | **10.92 GB** (45 %) | 17.42 GB (73 %) |
+| Repair task, median | 254.2 s | **211.9 s** |
+| Range | 176.5–340.1 s | 180.4–261.9 s |
 | Verified | **6 / 6** | **6 / 6** |
-| Steps | 7–10 | 5–7 |
-| Schema errors | 0 / 52 | 0 / 39 |
+| Steps | 5–9 | 5–7 |
+| Schema errors | 0 / 44 | 0 / 39 |
 
-**The reliability survives the compression.** Six of six, zero malformed tool calls in 52,
-the test file byte-identical every time. Sub-4-bit builds are supposed to collapse on
-exactly this — tool-call formatting and instruction-following under a long context — and
-this one does not. That is the result worth having.
+**The reliability survives the compression.** Six of six on both packings, zero malformed
+tool calls in 96 across the two, the test file byte-identical every time. Sub-4-bit builds
+are supposed to collapse on exactly this — tool-call formatting and instruction-following
+under a long context — and this one does not. That is the result worth having.
 
 ### The cost is entirely in the prefill
 
+Measured first on `PTQ1_0`, the dense packing:
+
 | | prefill | decode |
 |---|---:|---:|
-| Ternary Bonsai 2 | **88.8 tok/s** | **21.3 tok/s** |
+| Ternary Bonsai 2, `PTQ1_0` | **88.8 tok/s** | **21.3 tok/s** |
 | Qwen3.8-27B UD-IQ4_XS | 251.6 tok/s | 16.9 tok/s |
 | ratio | **2.8× slower** | **1.26× faster** |
 
-Both measured on the same machine against the same 7,120-token prompt, cold. The benchmark's
-own 48 requests agree: prefill median 85.7 tok/s (70.6–90.4), decode median 21.7 (19.8–22.9).
+Same machine, same 7,120-token prompt, cold. The benchmark's own 48 requests agree: prefill
+median 85.7 tok/s (70.6–90.4), decode median 21.7 (19.8–22.9).
 
 Ternary weights are tiny to *move* and no cheaper to *multiply*. Decode is bandwidth-bound,
 so it gains; prefill is compute-bound and the packed format has to be unpacked on the way
 in, so it loses — and loses by more than decode gains. Finding 13 and Finding 14 both
 landed on the same rule from other directions, and it applies again here: **on an agentic
-workload the turns are the cost**, and a turn is a prefill of the whole grown history. The
-step count moved the wrong way too (7–10 against 5–7), which compounds it.
+workload the turns are the cost**, and a turn is a prefill of the whole grown history. A
+1.26× decode advantage cannot pay for a 2.8× prefill deficit when the loop re-prefills
+everything on every step.
 
-> **The trade, stated plainly.** 41 % of the memory back for 34 % more wall-clock, at
-> identical verified reliability. On this machine that is a poor deal — 17.42 GB already
-> fits in 24 GB, so the freed memory buys nothing. It becomes a good deal exactly where
-> 14.25 GB does not fit: a 16 GB Mac, where the IQ4_XS row is not an option at all. Same
-> shape as Finding 14's verdict about edge0, one bit-width down.
+### Which packing — and the answer to the obvious objection
+
+There is an obvious objection to all of that. If the gap is the *unpacking*, then it is a
+property of this file, not of ternary weights — and PrismML ships a second packing of the
+identical values precisely to make unpacking cheaper. `PTQ1_0` packs trits densely and
+lands near the information-theoretic floor — a trit is log₂3 = 1.585 bits — at 1.75
+bits/weight and 5.95 GB, but extracting one costs real arithmetic. `PQ2_0` gives each trit
+its own 2-bit slot: 2.13 bits/weight, 7.21 GB, and unpacking is a shift and a mask. Their
+own model card says neither is uniformly faster.
+
+So `PQ2_0` got the identical six runs.
+
+| | `PTQ1_0` | `PQ2_0` | UD-IQ4_XS |
+|---|---:|---:|---:|
+| Weights | **5.95 GB** | 7.21 GB | 14.25 GB |
+| Wired peak | **10.31 GB** (43 %) | 10.92 GB (45 %) | 17.42 GB (73 %) |
+| Prefill | 88.8 tok/s | 103.9 tok/s | **251.6 tok/s** |
+| Decode | 21.3 tok/s | **23.6 tok/s** | 16.9 tok/s |
+| Median | 284.5 s | 254.2 s | **211.9 s** |
+| Range | 257.9–434.3 s | 176.5–340.1 s | 180.4–261.9 s |
+| Verified | **6 / 6** | **6 / 6** | **6 / 6** |
+| Steps | 7–10 | 5–9 | 5–7 |
+| Schema errors | 0 / 52 | 0 / 44 | 0 / 39 |
+
+**The objection does not survive, but it does not fully fail either.** `PQ2_0` is 17 %
+faster on prefill — real, and not enough. 103.9 tok/s against 251.6 closes a sixth of the
+gap and leaves 2.4×. The prefill penalty is a property of the ternary matmul, not of the
+dense packing.
+
+**What did surprise me is that there is no trade-off between the two packings at all.**
+`PQ2_0` moves 21 % more weight bytes per token, so decode should have paid for the cheaper
+unpacking. It did not — decode went *up* too, 21.7 → 24.7 tok/s per-request median, with
+distributions that do not overlap (19.8–22.9 against 23.6–25.8). Unpacking is on the
+critical path in both directions. `PQ2_0` simply dominates for 0.52 GB.
+
+> **A caveat on the wall-clock column.** The per-request throughput difference is solid:
+> 43–48 samples per side, and decode does not overlap. The 30 s gap between the two
+> end-to-end medians is not. At n = 6 the ranges overlap heavily and step count — 5 to 10,
+> set by how quickly the model commits to an edit — dominates the variance. Directionally
+> consistent with the throughput, not separated by it.
+
+> **The trade, stated plainly.** 37 % of the memory back for 20 % more wall-clock, at
+> identical verified reliability, taking `PQ2_0` — the better of the two packings. On this
+> machine that is a poor deal: 17.42 GB already fits in 24 GB, so the freed memory buys
+> nothing. It becomes a good deal exactly where 14.25 GB does not fit — a 16 GB Mac, where
+> the IQ4_XS row is not an option at all. Same shape as Finding 14's verdict about edge0,
+> one bit-width down.
 
 ### Three ways to lose an hour before the first token
 
@@ -1070,9 +1121,9 @@ on AC, with `TCPKeepAlive=active`. An active Metal workload is not activity. Re-
 > A long unattended benchmark on macOS needs a sleep assertion, or it is not measuring the
 > model. The runners in [`bench/`](../bench/) now take one themselves — `agentlib.keep_awake()`
 > spawns `caffeinate -dimsu -w <pid>`, so it is released on exit, on a crash and on Ctrl-C
-> alike; `NO_CAFFEINATE=1` opts out. The symptom — "it got 20× slower overnight" — reads as thermal throttling or a
-> memory leak, and the correlation with long generations is pure survivorship: longer
-> requests simply offer a bigger window to fall into a sleep cycle.
+> alike; `NO_CAFFEINATE=1` opts out. The symptom — "it got 20× slower overnight" — reads as
+> thermal throttling or a memory leak, and the correlation with long generations is pure
+> survivorship: longer requests simply offer a bigger window to fall into a sleep cycle.
 
 ---
 
@@ -1138,10 +1189,11 @@ configuration against a second model — took eleven minutes when I finally ran 
 - Why `opencode run` hangs before session creation while the TUI works.
 - Where between seven and seventeen tools the agent surface starts to cost something.
   Seven is free on a 27B; seventeen breaks everything. The curve in between is unmeasured.
-- Whether the ternary prefill penalty is inherent or just kernel maturity. `PQ2_0` stores
-  each trit in a 2-bit slot precisely to make unpacking cheaper, and PrismML says neither
-  packing is uniformly faster. Only `PTQ1_0` was measured here; the 2.8x prefill gap may be
-  a packing choice rather than a property of ternary weights.
+- Whether a ternary prefill can be made competitive at all. `PQ2_0` answered the narrow
+  version of this — the penalty is not the dense packing, since cheaper unpacking bought
+  only 17 % and left 2.4x. Whether it is the Hadamard activation transform, the hybrid
+  attention kernels, or ternary matmul itself is unmeasured, and separating them needs a
+  profiler rather than another download.
 - Whether the same 1.75-bit build behaves this way on a Mac where Metal compiles cleanly.
   Everything above ran with the M5 tensor API disabled, which is a workaround, not a
   baseline.
