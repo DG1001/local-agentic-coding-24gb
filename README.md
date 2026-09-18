@@ -3,7 +3,7 @@
 Measurements and tooling for one question: which local model is actually usable for
 agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Eight models, 434 tool calls, six to twelve identical runs per configuration, measured on an Apple
+Nine models, 486 tool calls, six to twelve identical runs per configuration, measured on an Apple
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
@@ -25,6 +25,7 @@ send.
 | gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6**, 55 s median | 67 % |
 | Qwen3.8-27B IQ4_XS | 14.25 GB | llama.cpp | **6/6**, 212 s median | 73 % |
 | Qwen3.8-27B IQ4_XS, no thinking | 14.25 GB | llama.cpp | 11/12, **113 s median** | 71 % |
+| **Ternary Bonsai 2 27B** (1.75-bit) | **5.95 GB** | llama.cpp (PrismML fork) | **6/6**, 285 s median | **43 %** |
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6**, 57 s median | **39 %** |
 | Nanbeige4.2-3B Q4_K_M | **2.68 GB** | llama.cpp (upstream) | 5/6, 62 s median | 47 % |
 | Gemma 4 12B Q4_K_M | 7.38 GB | llama.cpp | 5/6, 156 s median | 51 % |
@@ -53,10 +54,19 @@ Pick by *active* parameters, not total ones — the companion study measures the
 effect at 128 GB. (Turning its reasoning block off halves that to 113 s over twelve runs,
 at 11/12 instead of 6/6 — see the report.)
 
-**And for four of eight models, the inference engine decided usability.** MLX capped
+**Ternary quantisation keeps the reliability and spends it on prefill.** Ternary Bonsai 2
+27B is the *same* Qwen3.8-27B at 1.75 bits/weight — 5.95 GB instead of 14.25 GB. It also
+scores 6/6, with zero malformed tool calls in 52, at **43 % of memory instead of 73 %**.
+The bill arrives in the median: 285 s against 212 s. Decode is 1.28× *faster* (tiny weights
+to move), prefill is 2.8× slower (the same 27B to multiply, plus unpacking), and on an
+agent loop prefill is what every turn pays. At 24 GB that is a poor trade, because 14.25 GB
+already fits. At 16 GB, where it does not, the arithmetic inverts.
+
+**And for five of nine models, the inference engine decided usability.** MLX capped
 Devstral's context at 4,864, refused to load Qwen3.6-27B at all, and broke on Gemma's
 channel format. Nanbeige4.2-3B fails on *both* of LM Studio's engines — only an upstream
-llama.cpp build runs it. The engine version matters, not just the engine.
+llama.cpp build runs it. Ternary Bonsai 2 needs a *forked* llama.cpp and dies in stock
+builds with a message that names nothing. The engine version matters, not just the engine.
 
 **The tool count is not the cost — the turn count is.** The same repair task, same model,
 three harnesses: 2 tools → 212 s, 6 tools → 201 s, 7 tools → 237 s. Noise, not a trend.
@@ -87,6 +97,9 @@ failure and was not.
 
 | Symptom | Cause | Where |
 |---|---|---|
+| `llama_model_loader: failed to load model` on a ternary GGUF, 114 ms in | `PTQ1_0`/`PQ2_0` need the PrismML llama.cpp fork; stock llama.cpp refuses and says nothing useful | Finding 15 |
+| Model answers correctly but `-ngl 99` does nothing and wired stays at baseline | Metal shader compile failed on M5; set `GGML_METAL_TENSOR_DISABLE=1` | Finding 15 |
+| An unattended benchmark is ~20x slower overnight | macOS Idle Sleep cycling 900 s at a time — an active Metal workload is not activity. The runners in `bench/` now hold the assertion themselves | Finding 15 |
 | `Model type nanbeige not supported` | LM Studio's MLX runtime predates the architecture; upstream llama.cpp runs it | Finding 6 |
 | `llama-server exited before becoming healthy, exitCode=1` | LM Studio's bundled llama.cpp is too old — `lms runtime update` still says "up-to-date" | Finding 6 |
 | `<\|channel>thought` repeating until the token limit | LM Studio's MLX path does not strip Gemma 4's channel markers; GGUF does | Finding 6 |

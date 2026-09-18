@@ -960,6 +960,122 @@ hardware edge0 is built for.
 
 ---
 
+## Finding 15 — Ternary at 1.75 bits: 59 % of the memory, 34 % more wall-clock
+
+Every quantisation comparison in this report so far changed two things at once — a
+different model *and* a different bit-width. [Ternary Bonsai 2
+27B](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf) (PrismML, Apache-2.0)
+removes that confound. It is a ternary build of **the same Qwen3.8-27B** that already
+holds a row here: weights in {−1, 0, +1} with FP16 group-wise scales, packed as `PTQ1_0`
+at 1.75 bits/weight, in a Hadamard-rotated basis. Same base model, same harness, same
+16k context, same sampling. Only the bit-width differs.
+
+`kvcalc` reads the hybrid backbone correctly — 16 of 64 layers on full attention, 64
+KB/token — and predicted 9.52 GB at 16k (5.95 weights + 1.07 KV + 2.5 overhead). Measured
+peak: **10.31 GB**.
+
+| | Ternary Bonsai 2 | Qwen3.8-27B UD-IQ4_XS |
+|---|---:|---:|
+| Bits per weight | **1.75** | ~4.25 |
+| Weights | **5.95 GB** | 14.25 GB |
+| Wired peak | **10.31 GB** (43 %) | 17.42 GB (73 %) |
+| Repair task, median | 284.5 s | **211.9 s** |
+| Range | 257.9–434.3 s | 180.4–261.9 s |
+| Verified | **6 / 6** | **6 / 6** |
+| Steps | 7–10 | 5–7 |
+| Schema errors | 0 / 52 | 0 / 39 |
+
+**The reliability survives the compression.** Six of six, zero malformed tool calls in 52,
+the test file byte-identical every time. Sub-4-bit builds are supposed to collapse on
+exactly this — tool-call formatting and instruction-following under a long context — and
+this one does not. That is the result worth having.
+
+### The cost is entirely in the prefill
+
+| | prefill | decode |
+|---|---:|---:|
+| Ternary Bonsai 2 | **88.8 tok/s** | **21.3 tok/s** |
+| Qwen3.8-27B UD-IQ4_XS | 251.6 tok/s | 16.9 tok/s |
+| ratio | **2.8× slower** | **1.26× faster** |
+
+Both measured on the same machine against the same 7,120-token prompt, cold. The benchmark's
+own 48 requests agree: prefill median 85.7 tok/s (70.6–90.4), decode median 21.7 (19.8–22.9).
+
+Ternary weights are tiny to *move* and no cheaper to *multiply*. Decode is bandwidth-bound,
+so it gains; prefill is compute-bound and the packed format has to be unpacked on the way
+in, so it loses — and loses by more than decode gains. Finding 13 and Finding 14 both
+landed on the same rule from other directions, and it applies again here: **on an agentic
+workload the turns are the cost**, and a turn is a prefill of the whole grown history. The
+step count moved the wrong way too (7–10 against 5–7), which compounds it.
+
+> **The trade, stated plainly.** 41 % of the memory back for 34 % more wall-clock, at
+> identical verified reliability. On this machine that is a poor deal — 17.42 GB already
+> fits in 24 GB, so the freed memory buys nothing. It becomes a good deal exactly where
+> 14.25 GB does not fit: a 16 GB Mac, where the IQ4_XS row is not an option at all. Same
+> shape as Finding 14's verdict about edge0, one bit-width down.
+
+### Three ways to lose an hour before the first token
+
+**Stock llama.cpp cannot load it, and will not tell you why.** LM Studio 0.4.20's bundled
+llama.cpp 2.37.0 indexes the file happily, reports it as an ordinary `qwen35` of 5.95 GB,
+passes the `weights × 1.4` guardrail that refuses Qwen3.6-27B (Finding 6) — and then dies
+114 ms into the load with the same generic sentence three times over, naming neither the
+unknown quantisation nor the Hadamard rotation. The CLI shows 4 % progress first, which
+looks like a memory problem and is not. The Hadamard transform on the activations is not
+upstream; the PrismML fork is mandatory. Worse, their own demo repo warns that the
+conventional `Q2_0` variant *does* load on stock llama.cpp and emits gibberish.
+
+**The fork's latest release has no macOS binary.** `prism-b10687-5d80cff` ships three
+assets, all Windows/CUDA. The setup script pulls from `latest`. Pin `prism-b10685-7dffb15`.
+
+**On M5 the Metal shaders fail to compile, and the server does not care.** One `E` line 41
+ms after start — `ggml_metal_library_init_from_source: error compiling source` — then
+`model loaded`, correct answers, and every token computed on the CPU with `-ngl 99`
+silently doing nothing. The fix is `GGML_METAL_TENSOR_DISABLE=1`, documented in the demo
+repo. The reliable way to catch it is the memory, not the log:
+
+| | wired | IOAccelerator (dirty) | prefill |
+|---|---:|---:|---:|
+| without the flag | 2.99 GB (= idle baseline) | 800 KB | 40 tok/s |
+| with the flag | 10.38 GB | 9712 KB | 88.8 tok/s |
+
+Decode was **22.5 tok/s on the CPU against 21.3 on the GPU** — indistinguishable. At 1.75
+bits the weights are so cheap to stream that the GPU contributes nothing to decode at all;
+the entire benefit of Metal here is the 2.2× on prefill.
+
+### The measurement trap that cost the most
+
+The first attempt at these six runs produced medians near **3800 s** — a factor of 22 over
+the smoke run on the same server, same model, same prompt. It looked like a runtime defect,
+and the per-request timings encouraged that reading: baseline throughput never degraded
+(79–90 tok/s prefill, 21–23 tok/s decode from the first request to the last), but
+individual requests stalled at a suspiciously constant ~900 s, and the stalls correlated
+with long generations. A controlled 2600-token generation showed a perfectly flat 22 tok/s,
+which killed that hypothesis. The stalls were spaced at multiples of ~15 minutes.
+
+`pmset -g log` had the answer:
+
+```
+02:19:04  Sleep      Entering Sleep state due to 'Idle Sleep' ... 900 secs
+02:34:04  DarkWake   from Deep Idle ... 4 secs
+02:34:08  Sleep      'Dark Wake Thermal Emergency' ... 900 secs
+02:49:08  DarkWake   ... 45 secs
+02:49:53  Sleep      'Maintenance Sleep' ... 900 secs
+```
+
+The Mac entered Idle Sleep three minutes after the benchmark started and cycled all night,
+on AC, with `TCPKeepAlive=active`. An active Metal workload is not activity. Re-run under
+`caffeinate -dimsu`: **0 stalls in 48 requests**, median 284.5 s.
+
+> A long unattended benchmark on macOS needs a sleep assertion, or it is not measuring the
+> model. The runners in [`bench/`](../bench/) now take one themselves — `agentlib.keep_awake()`
+> spawns `caffeinate -dimsu -w <pid>`, so it is released on exit, on a crash and on Ctrl-C
+> alike; `NO_CAFFEINATE=1` opts out. The symptom — "it got 20× slower overnight" — reads as thermal throttling or a
+> memory leak, and the correlation with long generations is pure survivorship: longer
+> requests simply offer a bigger window to fall into a sleep cycle.
+
+---
+
 ## Corrections
 
 Sixteen conclusions had to be retracted. They are here because the pattern transfers better
@@ -1022,6 +1138,13 @@ configuration against a second model — took eleven minutes when I finally ran 
 - Why `opencode run` hangs before session creation while the TUI works.
 - Where between seven and seventeen tools the agent surface starts to cost something.
   Seven is free on a 27B; seventeen breaks everything. The curve in between is unmeasured.
+- Whether the ternary prefill penalty is inherent or just kernel maturity. `PQ2_0` stores
+  each trit in a 2-bit slot precisely to make unpacking cheaper, and PrismML says neither
+  packing is uniformly faster. Only `PTQ1_0` was measured here; the 2.8x prefill gap may be
+  a packing choice rather than a property of ternary weights.
+- Whether the same 1.75-bit build behaves this way on a Mac where Metal compiles cleanly.
+  Everything above ran with the M5 tensor API disabled, which is a workaround, not a
+  baseline.
 - Whether turn count is reducible by prompting. jaja's extra four turns look like caution,
   not confusion — but nobody measured whether telling it to batch edits would help.
 

@@ -396,7 +396,7 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Eight models, 434 tool calls, six to twelve identical runs per configuration. Every model
+    <p class="standfirst">Nine models, 486 tool calls, six to twelve identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
@@ -1604,6 +1604,147 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
     </div>
   </section>
 
+  <section id="ternary">
+    <div class="col">
+      <h2><span class="num">Finding 15</span>Ternary at 1.75 bits: 59 % of the memory, 34 % more wall-clock</h2>
+      <p>Every quantisation comparison above changed two things at once — a different model <em>and</em> a
+      different bit-width. <a href="https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf">Ternary
+      Bonsai 2 27B</a> (PrismML, Apache-2.0) removes that confound. It is a ternary build of <strong>the
+      same Qwen3.8-27B</strong> that already holds a row here: weights in {−1, 0, +1} with FP16 group-wise
+      scales, packed as <code>PTQ1_0</code> at 1.75 bits/weight, in a Hadamard-rotated basis. Same base
+      model, same harness, same 16k context, same sampling. Only the bit-width differs.</p>
+      <p><code>kvcalc</code> reads the hybrid backbone correctly — 16 of 64 layers on full attention, 64
+      KB/token — and predicted 9.52 GB at 16k (5.95 weights + 1.07 KV + 2.5 overhead). Measured peak:
+      <strong>10.31 GB</strong>.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Same base model, same harness, same context — only the bit-width differs</caption>
+        <thead><tr><th></th><th class="num">Ternary Bonsai 2</th><th class="num">Qwen3.8-27B UD-IQ4_XS</th></tr></thead>
+        <tbody>
+          <tr><th>Bits per weight</th><td class="num"><strong>1.75</strong></td><td class="num">~4.25</td></tr>
+          <tr><th>Weights</th><td class="num"><strong>5.95 GB</strong></td><td class="num">14.25 GB</td></tr>
+          <tr><th>Wired peak</th><td class="num"><strong>10.31 GB</strong> (43 %)</td><td class="num">17.42 GB (73 %)</td></tr>
+          <tr><th>Repair task, median</th><td class="num">284.5 s</td><td class="num"><strong>211.9 s</strong></td></tr>
+          <tr><th>Range</th><td class="num">257.9–434.3 s</td><td class="num">180.4–261.9 s</td></tr>
+          <tr><th>Verified</th><td class="num"><span class="pill ok">6 / 6</span></td><td class="num"><span class="pill ok">6 / 6</span></td></tr>
+          <tr><th>Steps</th><td class="num">7–10</td><td class="num">5–7</td></tr>
+          <tr><th>Schema errors</th><td class="num">0 / 52</td><td class="num">0 / 39</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>The reliability survives the compression.</strong> Six of six, zero malformed tool calls
+      in 52, the test file byte-identical every time. Sub-4-bit builds are supposed to collapse on exactly
+      this — tool-call formatting and instruction-following under a long context — and this one does not.
+      That is the result worth having.</p>
+
+      <h3>The cost is entirely in the prefill</h3>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Throughput on an identical 7,120-token prompt, cold, both on llama.cpp</caption>
+        <thead><tr><th></th><th class="num">prefill</th><th class="num">decode</th></tr></thead>
+        <tbody>
+          <tr><th>Ternary Bonsai 2</th><td class="num"><strong>88.8 tok/s</strong></td><td class="num"><strong>21.3 tok/s</strong></td></tr>
+          <tr><th>Qwen3.8-27B UD-IQ4_XS</th><td class="num">251.6 tok/s</td><td class="num">16.9 tok/s</td></tr>
+          <tr><th>ratio</th><td class="num"><span class="pill bad">2.8× slower</span></td><td class="num"><span class="pill ok">1.26× faster</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>The benchmark's own 48 requests agree: prefill median 85.7 tok/s (70.6–90.4), decode median
+      21.7 (19.8–22.9).</p>
+      <p>Ternary weights are tiny to <em>move</em> and no cheaper to <em>multiply</em>. Decode is
+      bandwidth-bound, so it gains; prefill is compute-bound and the packed format has to be unpacked on
+      the way in, so it loses — and loses by more than decode gains. Finding 13 and Finding 14 both landed
+      on the same rule from other directions, and it applies again here: <strong>on an agentic workload
+      the turns are the cost</strong>, and a turn is a prefill of the whole grown history. The step count
+      moved the wrong way too (7–10 against 5–7), which compounds it.</p>
+    </div>
+
+    <div class="callout key">
+      <div class="label">The trade, stated plainly</div>
+      <p>41 % of the memory back for 34 % more wall-clock, at identical verified reliability. On this
+      machine that is a poor deal — 17.42 GB already fits in 24 GB, so the freed memory buys nothing. It
+      becomes a good deal exactly where 14.25 GB does not fit: a 16 GB Mac, where the IQ4_XS row is not an
+      option at all. Same shape as Finding 14's verdict about edge0, one bit-width down.</p>
+    </div>
+
+    <div class="col">
+      <h3>Three ways to lose an hour before the first token</h3>
+      <p><strong>Stock llama.cpp cannot load it, and will not tell you why.</strong> LM Studio 0.4.20's
+      bundled llama.cpp 2.37.0 indexes the file happily, reports it as an ordinary <code>qwen35</code> of
+      5.95 GB, passes the <code>weights × 1.4</code> guardrail that refuses Qwen3.6-27B (Finding 6) — and
+      then dies 114 ms into the load with the same generic sentence three times over, naming neither the
+      unknown quantisation nor the Hadamard rotation. The CLI shows 4 % progress first, which looks like a
+      memory problem and is not. The Hadamard transform on the activations is not upstream; the PrismML
+      fork is mandatory. Worse, their own demo repo warns that the conventional <code>Q2_0</code> variant
+      <em>does</em> load on stock llama.cpp and emits gibberish.</p>
+      <p><strong>The fork's latest release has no macOS binary.</strong>
+      <code>prism-b10687-5d80cff</code> ships three assets, all Windows/CUDA. The setup script pulls from
+      <code>latest</code>. Pin <code>prism-b10685-7dffb15</code>.</p>
+      <p><strong>On M5 the Metal shaders fail to compile, and the server does not care.</strong> One
+      <code>E</code> line 41 ms after start — <code>ggml_metal_library_init_from_source: error compiling
+      source</code> — then <code>model loaded</code>, correct answers, and every token computed on the CPU
+      with <code>-ngl 99</code> silently doing nothing. The fix is
+      <code>GGML_METAL_TENSOR_DISABLE=1</code>, documented in the demo repo. The reliable way to catch it
+      is the memory, not the log:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>The same server, the same model, one environment variable apart</caption>
+        <thead><tr><th></th><th class="num">wired</th><th class="num">IOAccelerator (dirty)</th><th class="num">prefill</th></tr></thead>
+        <tbody>
+          <tr><th>without the flag</th><td class="num">2.99 GB <em>= idle baseline</em></td><td class="num">800 KB</td><td class="num">40 tok/s</td></tr>
+          <tr><th>with the flag</th><td class="num">10.38 GB</td><td class="num">9712 KB</td><td class="num">88.8 tok/s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Decode was <strong>22.5 tok/s on the CPU against 21.3 on the GPU</strong> — indistinguishable. At
+      1.75 bits the weights are so cheap to stream that the GPU contributes nothing to decode at all; the
+      entire benefit of Metal here is the 2.2× on prefill.</p>
+
+      <h3>The measurement trap that cost the most</h3>
+      <p>The first attempt at these six runs produced medians near <strong>3800 s</strong> — a factor of 22
+      over the smoke run on the same server, same model, same prompt. It looked like a runtime defect, and
+      the per-request timings encouraged that reading: baseline throughput never degraded (79–90 tok/s
+      prefill, 21–23 tok/s decode from the first request to the last), but individual requests stalled at a
+      suspiciously constant ~900 s, and the stalls correlated with long generations. A controlled
+      2,600-token generation showed a perfectly flat 22 tok/s, which killed that hypothesis. The stalls
+      were spaced at multiples of ~15 minutes.</p>
+      <p><code>pmset -g log</code> had the answer:</p>
+    </div>
+
+<pre><code>02:19:04  Sleep      Entering Sleep state due to 'Idle Sleep' ... 900 secs
+02:34:04  DarkWake   from Deep Idle ... 4 secs
+02:34:08  Sleep      'Dark Wake Thermal Emergency' ... 900 secs
+02:49:08  DarkWake   ... 45 secs
+02:49:53  Sleep      'Maintenance Sleep' ... 900 secs</code></pre>
+
+    <div class="col">
+      <p>The Mac entered Idle Sleep three minutes after the benchmark started and cycled all night, on AC,
+      with <code>TCPKeepAlive=active</code>. An active Metal workload is not activity. Re-run under
+      <code>caffeinate -dimsu</code>: <strong>0 stalls in 48 requests</strong>, median 284.5 s.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="label">Any unattended benchmark on macOS needs a sleep assertion</div>
+      <p>Or it is not measuring the model. The runners in <code>bench/</code> now take one themselves —
+      <code>agentlib.keep_awake()</code> spawns <code>caffeinate -dimsu -w &lt;pid&gt;</code>, so it is
+      released on exit, on a crash and on Ctrl-C alike; <code>NO_CAFFEINATE=1</code> opts out. The symptom — "it got 20× slower overnight" — reads as thermal
+      throttling or a memory leak, and the correlation with long generations is pure survivorship: longer
+      requests simply offer a bigger window to fall into a sleep cycle.</p>
+    </div>
+  </section>
+
   <section id="sizing">
     <div class="col">
       <h2><span class="num">Reference</span>Sizing candidates for 24 GB</h2>
@@ -1621,6 +1762,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
           <tr><th>Devstral-Small-2507 4-bit</th><td class="num">13.26 GB</td><td class="num">~17.5 GB</td><td class="num">73 %</td><td><span class="pill mid">check its KV first</span></td></tr>
           <tr><th>Devstral-Small-2-24B MXFP4</th><td class="num">14.39 GB</td><td class="num">16.25 GB <em>meas.</em></td><td class="num">68 %</td><td><span class="pill bad">4,864 ctx ceiling</span></td></tr>
           <tr><th>Qwen3.8-27B UD-IQ4_XS <em>gguf</em></th><td class="num">14.25 GB</td><td class="num">17.42 GB <em>meas.</em></td><td class="num">73 %</td><td><span class="pill ok">6/6, but 4x slower</span></td></tr>
+          <tr><th>Ternary Bonsai 2 27B <em>gguf, 1.75-bit</em></th><td class="num">5.95 GB</td><td class="num">10.31 GB <em>meas.</em></td><td class="num">43 %</td><td><span class="pill ok">6/6, needs the PrismML fork</span></td></tr>
           <tr><th>Qwen3.8-27B UD-Q4_K_M <em>gguf</em></th><td class="num">16.46 GB</td><td class="num">~20 GB</td><td class="num">83 %</td><td><span class="pill bad">same band as the guardrail block</span></td></tr>
           <tr><th>Devstral-Small-2-24B 4-bit</th><td class="num">15.10 GB</td><td class="num">—</td><td class="num">—</td><td><span class="pill bad">worse ceiling</span></td></tr>
           <tr><th>Qwen3.6-35B-A3B 3-bit</th><td class="num">15.20 GB</td><td class="num">19.29 GB <em>meas.</em></td><td class="num">80 %</td><td><span class="pill bad">3/6 under load</span></td></tr>
@@ -1837,6 +1979,12 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
         spanning twenty files, or a codebase that does not fit in 32k of context.</li>
         <li>Whether large tool-call arguments really drive the schema-failure risk. One occurrence in
         128 is a hypothesis, not a result.</li>
+        <li>Whether the ternary prefill penalty is inherent or just kernel maturity.
+        <code>PQ2_0</code> stores each trit in a 2-bit slot precisely to make unpacking cheaper, and
+        PrismML says neither packing is uniformly faster. Only <code>PTQ1_0</code> was measured here, so
+        the 2.8× prefill gap may be a packing choice rather than a property of ternary weights.</li>
+        <li>Whether the same 1.75-bit build behaves this way on a Mac where Metal compiles cleanly.
+        Finding 15 ran with the M5 tensor API disabled, which is a workaround, not a baseline.</li>
       </ul>
     </div>
   </section>

@@ -11,7 +11,8 @@
     "lm_studio": "0.4.20",
     "opencode": "1.18.9",
     "mlx_lm": "0.31.3",
-    "turbofieldfare": "0.3"
+    "turbofieldfare": "0.3",
+    "prism_llama_cpp": "prism-b10685-7dffb15 (PrismML fork, macos-arm64)"
   },
   "sampling_default": {
     "temperature": 0.6,
@@ -820,6 +821,99 @@
         "distributions": "do not overlap: slowest green without thinking 164.4 s beats the fastest with it, 180.4 s",
         "why": "the saving is in the step count, not only the reasoning tokens -- every step resends the whole context through all 27B parameters"
       }
+    },
+    "Ternary-Bonsai-2-27B-PTQ1_0": {
+      "_comment": "Ternary Bonsai 2 27B: PrismML's 1.75 bits/weight build of the SAME Qwen3.8-27B as Qwen3.8-27B-UD-IQ4_XS. Only the bit-width differs, so this is a controlled comparison of quantisation depth at constant base model, harness and context.",
+      "runtime": "llama.cpp (GGUF) via the PrismML fork prism-b10685-7dffb15, GGML_METAL_TENSOR_DISABLE=1",
+      "quant": "PrismML PTQ1_0 ternary {-1,0,+1}, g128 FP16 scales, Hadamard-rotated basis",
+      "bits_per_weight": 1.75,
+      "weights_gb": 5.95,
+      "context_granted": 16384,
+      "parallel": 1,
+      "passed": 6,
+      "of": 6,
+      "median_s": 284.5,
+      "range_s": [
+        257.9,
+        434.3
+      ],
+      "tool_calls": 52,
+      "schema_errors": 0,
+      "tests_untouched": "6/6",
+      "wired_peak_gb": 10.31,
+      "prefill_tok_s": {
+        "median": 85.7,
+        "min": 70.6,
+        "max": 90.4,
+        "n": 48
+      },
+      "decode_tok_s": {
+        "median": 21.7,
+        "min": 19.8,
+        "max": 22.9,
+        "n": 48
+      },
+      "thinking": true,
+      "thinking_note": "Template defaults enable_thinking=true at reasoning_effort xhigh and reasoning_content is populated, but llama-server does not report reasoning_tokens in usage -- the harness's 0 is a reporting gap, not an absence.",
+      "note": "kvcalc predicted 9.52 GB at 16k (5.95 weights + 1.07 KV + 2.5 overhead); measured peak 10.31 GB.",
+      "measurement_caveat": "A first attempt at these six runs produced medians near 3800 s. The machine had entered macOS Idle Sleep three minutes in and cycled 900 s asleep / ~45 s DarkWake all night. Re-run under caffeinate -dimsu: 0 stalls in 48 requests.",
+      "delta_vs_IQ4_XS": {
+        "median_s": "211.9 -> 284.5 (1.34x slower)",
+        "wired_peak_gb": "17.42 -> 10.31 (59% of the memory)",
+        "green": "6/6 -> 6/6",
+        "steps": "5-7 -> 7-10",
+        "mechanism": "prefill 251.6 -> 88.8 tok/s (2.8x slower), decode 16.9 -> 21.3 tok/s (1.26x faster), both on an identical 7120-token prompt; on an agentic loop the prefill loss dominates because every turn re-sends the grown history"
+      },
+      "runs": [
+        {
+          "steps": 8,
+          "bash": 8,
+          "write": 2,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 434.3
+        },
+        {
+          "steps": 7,
+          "bash": 5,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 257.9
+        },
+        {
+          "steps": 10,
+          "bash": 8,
+          "write": 3,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 265.6
+        },
+        {
+          "steps": 8,
+          "bash": 8,
+          "write": 2,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 412.6
+        },
+        {
+          "steps": 8,
+          "bash": 7,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 295.5
+        },
+        {
+          "steps": 7,
+          "bash": 6,
+          "write": 1,
+          "schema_errors": 0,
+          "reasoning": "not reported by llama-server",
+          "wall_s": 273.5
+        }
+      ]
     }
   },
   "kv_cache": {
