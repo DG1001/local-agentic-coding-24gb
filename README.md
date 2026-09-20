@@ -45,6 +45,13 @@ tok/s prefill against a dense 27B's 251.6. Its IQ3_M sibling has the identical m
 extra 2.5 GB buys a tighter tail (5–8 steps instead of 7–9), not speed, and pushes the peak
 to 81 %. Take the smaller file and spend the headroom on context.
 
+**But the benchmark hid a failure mode, and an unscripted session found it.** With the
+reasoning block off and a vague prompt — *"look at the data and carry on"*, which is what you
+type in the tenth turn — the 2-bit build stopped emitting tool calls in half of twelve tries
+and narrated them in prose instead. Three independent levers each fix it: more bits, a
+reasoning block, or a specific instruction. `repair_task` never saw it because its task text
+names the command to run. Keep the thinking on.
+
 **The fastest model in the set is the one that stops thinking.** Qwen3.6-35B-A3B is the
 same weights in both rows above. With its reasoning block it is the slowest entry and drops
 a run; without it, 6/6 at a 32 s median — 5.4× faster, and faster than anything else here.
@@ -116,6 +123,7 @@ failure and was not.
 | `llama_model_loader: failed to load model` on a ternary GGUF, 114 ms in | `PTQ1_0`/`PQ2_0` need the PrismML llama.cpp fork; stock llama.cpp refuses and says nothing useful | Finding 15 |
 | Model answers correctly but `-ngl 99` does nothing and wired stays at baseline | Metal shader compile failed on M5; set `GGML_METAL_TENSOR_DISABLE=1` | Finding 15 |
 | An unattended benchmark is ~20x slower overnight | macOS Idle Sleep cycling 900 s at a time — an active Metal workload is not activity. The runners in `bench/` now hold the assertion themselves | Finding 15 |
+| Model answers in prose, "I will now use the tool X", and never calls it | Low-bit build with reasoning off and a vague prompt — any one of: more bits, `--reasoning on`, or a specific instruction | Finding 16 |
 | `Model type nanbeige not supported` | LM Studio's MLX runtime predates the architecture; upstream llama.cpp runs it | Finding 6 |
 | `llama-server exited before becoming healthy, exitCode=1` | LM Studio's bundled llama.cpp is too old — `lms runtime update` still says "up-to-date" | Finding 6 |
 | `<\|channel>thought` repeating until the token limit | LM Studio's MLX path does not strip Gemma 4's channel markers; GGUF does | Finding 6 |

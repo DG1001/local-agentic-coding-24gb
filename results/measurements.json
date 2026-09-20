@@ -1582,5 +1582,18 @@
       "decode_tok_s": "14.9-17.7 on a Mac mini M4 Pro 24 GB; measured 19.5 here",
       "peak_active_gib": "2.9 claimed; measured 3.29 on the first run and 4.19 once the expert cache warmed -- 44% over the published figure"
     }
+  },
+  "tool_call_under_vague_prompts": {
+    "_comment": "Follow-up to Finding 16, prompted by an interactive session that stalled where the repair task did not. Twelve samples per cell, identical system prompt, jaja's six-tool surface (glob/grep/read/write/edit/bash), 32k context, temperature 0.6. Counted: turns that emitted at least one tool call, against turns that answered in prose instead.",
+    "vague_prompt": "schau dir die daten an und mach weiter",
+    "explicit_prompt": "Lies zuerst sketch.js mit dem read-Werkzeug. Rufe jetzt ein Werkzeug auf.",
+    "cells": {
+      "Q2_K / reasoning off / vague": "6/12",
+      "Q2_K / reasoning off / explicit": "12/12",
+      "Q2_K / reasoning on  / vague": "12/12",
+      "IQ3_M / reasoning off / vague": "12/12"
+    },
+    "finding": "Three independent levers, each on its own sufficient: more bits, a reasoning block, or an explicit instruction. The failure needs all three weaknesses at once. This is why the repair task showed 0 schema errors on the same weights with reasoning off -- its task text names the command to run.",
+    "caveat": "A different failure mode from the schema errors counted elsewhere. Here the arguments are never malformed; no tool call is emitted at all and the model narrates the call in prose (\"Ich werde jetzt die Dateien mit dem Werkzeug glob betrachten\"), sometimes claiming work it never did. The harness counts this as a turn without tool calls, not as an error."
   }
 }

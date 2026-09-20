@@ -1862,6 +1862,56 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
     </div>
 
     <div class="col">
+      <h3>The 6/6 above has a condition attached, and I found it by using the thing</h3>
+      <p>Everything above was measured through <code>repair_task</code>. Driving the same weights through
+      a real session — <a href="https://github.com/DG1001/jaja">jaja</a>, six tools,
+      <code>--reasoning off</code>, asked to carry on with a half-finished p5.js game — it stopped calling
+      tools altogether. Not malformed arguments: no tool call at all. It narrated the call instead,
+      <em>"Ich werde jetzt die Dateien mit dem Werkzeug <code>glob</code> betrachten"</em>, and twice
+      claimed edits it had never made.</p>
+      <p>That is a different failure from the schema errors counted everywhere else in this report, and
+      the harness does not count it as an error at all — it is simply a turn that ended without tool
+      calls. Twelve samples per cell, same system prompt, same six-tool surface, 32k:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Turns that emitted a tool call, out of twelve</caption>
+        <thead><tr><th></th><th class="num">vague prompt</th><th class="num">explicit prompt</th></tr></thead>
+        <tbody>
+          <tr><th>Q2_K, <code>--reasoning off</code></th><td class="num"><span class="pill bad">6 / 12</span></td><td class="num"><span class="pill ok">12 / 12</span></td></tr>
+          <tr><th>Q2_K, <code>--reasoning on</code></th><td class="num"><span class="pill ok">12 / 12</span></td><td class="num">—</td></tr>
+          <tr><th>IQ3_M, <code>--reasoning off</code></th><td class="num"><span class="pill ok">12 / 12</span></td><td class="num">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>The vague prompt was <em>"schau dir die daten an und mach weiter"</em> — which is what one
+      actually types in the tenth turn of a session. The explicit one named the file and the tool.</p>
+      <p><strong>Three independent levers, and any one of them is enough.</strong> More bits, a reasoning
+      block, or a specific instruction. The failure needs all three weaknesses at once, which is exactly
+      why it never appeared in the benchmark: <code>repair_task</code> hands the model a task text that
+      names the command to run. <strong>A fixed task prompt hides a whole failure mode</strong>, and it
+      took an unscripted session to surface it.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="label">This qualifies Finding 1 rather than contradicting it</div>
+      <p>Turning the reasoning block off still makes this model faster, and on <code>repair_task</code> it
+      still costs nothing. What it costs is margin — and the margin is spent by the vague prompts a human
+      actually writes. On a 2-bit build there was none left to spend.</p>
+    </div>
+
+    <div class="col">
+      <p>For a 24 GB machine that settles the packing question from the other side. <code>IQ3_M</code>
+      survives <code>--reasoning off</code>, but at 81 % wired it cannot also hold 128k of context.
+      <code>Q2_K</code> with the reasoning block on measures <strong>18.67 GB (78 %) at 128k</strong> and
+      answers reliably, so the recommendation stands with one word changed: take the smaller file, keep
+      the thinking.</p>
+    </div>
+
+    <div class="col">
       <h3>And the 2-bit quality collapse did not happen</h3>
       <p>Going in, I expected Q2_K to be the row where tool calling falls apart — that is the documented
       failure mode below 3 bits, and Bonsai's own model card measures a conventional IQ2_XXS build of

@@ -1179,6 +1179,43 @@ against nothing — the median does not move because there was no throughput to 
 > puts the IOGPU panic. Q2_K delivers the same median with eleven points of headroom. Take
 > Q2_K, and spend the headroom on context instead: at 64k it measures 17.37 GB, still 72 %.
 
+### The 6/6 above has a condition attached, and I found it by using the thing
+
+Everything above was measured through `repair_task`. Driving the same weights through a real
+session — [jaja](https://github.com/DG1001/jaja), six tools, `--reasoning off`, asked to
+carry on with a half-finished p5.js game — it stopped calling tools altogether. Not malformed
+arguments: no tool call at all. It narrated the call instead, *"Ich werde jetzt die Dateien
+mit dem Werkzeug `glob` betrachten"*, and twice claimed edits it had never made.
+
+That is a different failure from the schema errors counted everywhere else in this report,
+and the harness does not count it as an error at all — it is simply a turn that ended without
+tool calls. Twelve samples per cell, same system prompt, same six-tool surface, 32k:
+
+| | vague prompt | explicit prompt |
+|---|---:|---:|
+| Q2_K, `--reasoning off` | **6 / 12** | **12 / 12** |
+| Q2_K, `--reasoning on` | **12 / 12** | — |
+| IQ3_M, `--reasoning off` | **12 / 12** | — |
+
+The vague prompt was *"schau dir die daten an und mach weiter"* — which is what one actually
+types in the tenth turn of a session. The explicit one named the file and the tool.
+
+**Three independent levers, and any one of them is enough.** More bits, a reasoning block, or
+a specific instruction. The failure needs all three weaknesses at once, which is exactly why
+it never appeared in the benchmark: `repair_task` hands the model a task text that names the
+command to run. **A fixed task prompt hides a whole failure mode**, and it took an
+unscripted session to surface it.
+
+> **This qualifies Finding 1 rather than contradicting it.** Turning the reasoning block off
+> still makes this model faster, and on `repair_task` it still costs nothing. What it costs is
+> margin — and the margin is spent by the vague prompts a human actually writes. On a 2-bit
+> build there was none left to spend.
+
+For a 24 GB machine that settles the packing question from the other side. `IQ3_M` survives
+`--reasoning off`, but at 81 % wired it cannot also hold 128k of context. `Q2_K` with the
+reasoning block on measures **18.67 GB (78 %) at 128k** and answers reliably, so the
+recommendation stands with one word changed: take the smaller file, keep the thinking.
+
 ### And the 2-bit quality collapse did not happen
 
 Going in, I expected Q2_K to be the row where tool calling falls apart — that is the
