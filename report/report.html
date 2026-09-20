@@ -396,7 +396,7 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Nine models, 530 tool calls, six to twelve identical runs per configuration. Every model
+    <p class="standfirst">Ten models, 603 tool calls, six to twelve identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
@@ -1804,6 +1804,76 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
     </div>
   </section>
 
+  <section id="moe2bit">
+    <div class="col">
+      <h2><span class="num">Finding 16</span>The fastest configuration here is a 2-bit MoE, and the extra bits buy consistency rather than speed</h2>
+      <p>Finding 15 spent a lot of memory-for-latency arithmetic on a dense 27B. The counter-example arrived
+      from the other direction:
+      <a href="https://huggingface.co/empero-ai/Qwen3.8-35B-A3B-Distill-GGUF">Qwen3.8-35B-A3B-Distill</a>
+      (empero-ai) distils the Qwen3.8 models <em>into</em> the Qwen3.6-35B-A3B MoE architecture — 30 Gated
+      DeltaNet plus 10 full-attention layers, 256 experts routed 8 per token, ~3 B active.
+      <code>kvcalc</code> reads it as 20 KB/token, the same cheap KV as the 35B-A3B row above.</p>
+      <p>Both 3-bit-class packings got the standard six runs, <code>--reasoning off</code>, 32k context.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>The same checkpoint in two quantisations, against the model whose record it takes</caption>
+        <thead><tr><th></th><th class="num">Q2_K</th><th class="num">IQ3_M</th><th class="num">Qwen3.6-35B-A3B 3-bit, no think</th></tr></thead>
+        <tbody>
+          <tr><th>Weights</th><td class="num"><strong>13.84 GB</strong></td><td class="num">16.34 GB</td><td class="num">15.20 GB</td></tr>
+          <tr><th>Wired peak</th><td class="num"><strong>16.92 GB</strong> (70 %)</td><td class="num">19.34 GB (81 %)</td><td class="num">19.29 GB (80 %)</td></tr>
+          <tr><th>Median</th><td class="num"><strong>28.6 s</strong></td><td class="num"><strong>28.6 s</strong></td><td class="num">32.5 s</td></tr>
+          <tr><th>Range</th><td class="num">27.4–42.7 s</td><td class="num"><strong>26.8–30.6 s</strong></td><td class="num">20.5–73.0 s</td></tr>
+          <tr><th>Verified</th><td class="num"><span class="pill ok">6 / 6</span></td><td class="num"><span class="pill ok">6 / 6</span></td><td class="num"><span class="pill ok">6 / 6</span></td></tr>
+          <tr><th>Steps</th><td class="num">7–9</td><td class="num"><strong>5–8</strong></td><td class="num">6–13</td></tr>
+          <tr><th>Schema errors</th><td class="num">0 / 39</td><td class="num">0 / 34</td><td class="num">0 / 48</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>A 2-bit quantisation is now the fastest thing in this report</strong>, and it takes the
+      record at <em>lower</em> memory than the model it displaces: 70 % against 80 %. On the paired
+      7,084-token prompt it prefills at 1,186 tok/s against the dense 27B's 251.6 and decodes at 72.7
+      against 17.1. The agent prompt that costs the dense model 28 seconds costs this one six.</p>
+      <p>None of that is cleverness. The step counts are ordinary — 7 to 9, no better than anything else
+      here. The entire margin is throughput, and the throughput is 3 B active parameters instead of 27 B
+      dense. That is Finding 4's rule, restated one more time: <strong>select on active parameters, not on
+      file size.</strong> These two files are within 2.5 GB of the dense 27B and finish the same task seven
+      times faster.</p>
+
+      <h3>The extra bits do buy something — just not what I expected</h3>
+      <p>I loaded IQ3_M expecting it to be faster, and predicted it would not fit. Both were wrong.</p>
+      <p>It fits: 19.34 GB against the ~19.8 GB I projected. And it is not faster — the medians are
+      identical to the tenth of a second, because the two files are the same model at the same
+      active-parameter count, so they stream at the same rate. What the extra 2.5 GB buys is
+      <strong>consistency</strong>: 5–8 steps instead of 7–9, 34 tool calls instead of 39, and a range of
+      26.8–30.6 s against Q2_K's 27.4–42.7 s. Q2_K's slow run took 9 steps and 42.7 s; IQ3_M never had
+      one.</p>
+    </div>
+
+    <div class="callout key">
+      <div class="label">On 24 GB that is the wrong end of the trade</div>
+      <p>IQ3_M peaked at 19.34 GB, and one sample in 92 crossed the 19.2 GB line where Finding 8 puts the
+      wired step function and Finding 10 puts the IOGPU panic. Q2_K delivers the same median with eleven
+      points of headroom. Take Q2_K, and spend the headroom on context instead: at 64k it measures
+      17.37 GB, still 72 %.</p>
+    </div>
+
+    <div class="col">
+      <h3>And the 2-bit quality collapse did not happen</h3>
+      <p>Going in, I expected Q2_K to be the row where tool calling falls apart — that is the documented
+      failure mode below 3 bits, and Bonsai's own model card measures a conventional IQ2_XXS build of
+      Qwen3.8-27B at 72.59 against 84.78 for its ternary format. The warning was reasonable and it was
+      wrong here: <strong>zero malformed tool calls in 39</strong>, the test file byte-identical in all six
+      runs, 22/22 passing every time.</p>
+      <p>Two sub-4-bit builds in two findings, both holding. The honest conclusion is not "low-bit is fine"
+      but that the collapse threshold is not where the bit count alone predicts, and the only way to know
+      for a given checkpoint is to run the task.</p>
+    </div>
+  </section>
+
   <section id="sizing">
     <div class="col">
       <h2><span class="num">Reference</span>Sizing candidates for 24 GB</h2>
@@ -1823,6 +1893,8 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
           <tr><th>Qwen3.8-27B UD-IQ4_XS <em>gguf</em></th><td class="num">14.25 GB</td><td class="num">17.42 GB <em>meas.</em></td><td class="num">73 %</td><td><span class="pill ok">6/6, but 4x slower</span></td></tr>
           <tr><th>Ternary Bonsai 2 27B <em>gguf, PTQ1_0</em></th><td class="num">5.95 GB</td><td class="num">10.31 GB <em>meas.</em></td><td class="num">43 %</td><td><span class="pill ok">6/6, needs the PrismML fork</span></td></tr>
           <tr><th>Ternary Bonsai 2 27B <em>gguf, PQ2_0</em></th><td class="num">7.21 GB</td><td class="num">10.92 GB <em>meas.</em></td><td class="num">45 %</td><td><span class="pill ok">6/6, the faster packing</span></td></tr>
+          <tr><th>Qwen3.8-35B-A3B Distill <em>gguf, Q2_K</em></th><td class="num">13.84 GB</td><td class="num">16.92 GB <em>meas.</em></td><td class="num">70 %</td><td><span class="pill ok">6/6, fastest here</span></td></tr>
+          <tr><th>Qwen3.8-35B-A3B Distill <em>gguf, IQ3_M</em></th><td class="num">16.34 GB</td><td class="num">19.34 GB <em>meas.</em></td><td class="num">81 %</td><td><span class="pill mid">6/6, but touches the 80 % band</span></td></tr>
           <tr><th>Qwen3.8-27B UD-Q4_K_M <em>gguf</em></th><td class="num">16.46 GB</td><td class="num">~20 GB</td><td class="num">83 %</td><td><span class="pill bad">same band as the guardrail block</span></td></tr>
           <tr><th>Devstral-Small-2-24B 4-bit</th><td class="num">15.10 GB</td><td class="num">—</td><td class="num">—</td><td><span class="pill bad">worse ceiling</span></td></tr>
           <tr><th>Qwen3.6-35B-A3B 3-bit</th><td class="num">15.20 GB</td><td class="num">19.29 GB <em>meas.</em></td><td class="num">80 %</td><td><span class="pill bad">3/6 under load</span></td></tr>
@@ -2063,6 +2135,10 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
     <code>PTQ1_0</code> and <code>PQ2_0</code> packings, served by the PrismML llama.cpp fork
     <code>prism-b10685-7dffb15</code> with <code>GGML_METAL_TENSOR_DISABLE=1</code>. Its comparison row,
     Qwen3.8-27B UD-IQ4_XS, was re-measured in the same session for the throughput figures.</p>
+    <p>Finding 16 is from the same later session: <code>empero-ai/Qwen3.8-35B-A3B-Distill-GGUF</code>,
+    the <code>Q2_K</code> and <code>IQ3_M</code> packings, on the Homebrew <code>llama-server</code>
+    build 10210 with <code>--reasoning off</code>. That build loads the Gated DeltaNet MoE architecture
+    without a forked binary; the model card's warning about older builds did not bite here.</p>
     <p>The harness was a ~180-line Python loop talking directly to the OpenAI-compatible endpoint,
     validating tool arguments against the declared schema itself. It exists because the coding agent had
     to be ruled out as a variable — which, twice, it turned out to be. The repair task used the same loop

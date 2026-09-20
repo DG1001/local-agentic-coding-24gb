@@ -3,7 +3,7 @@
 Measurements and tooling for one question: which local model is actually usable for
 agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Nine models, 530 tool calls, six to twelve identical runs per configuration, measured on an Apple
+Ten models, 603 tool calls, six to twelve identical runs per configuration, measured on an Apple
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
@@ -25,6 +25,8 @@ send.
 | gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6**, 55 s median | 67 % |
 | Qwen3.8-27B IQ4_XS | 14.25 GB | llama.cpp | **6/6**, 212 s median | 73 % |
 | Qwen3.8-27B IQ4_XS, no thinking | 14.25 GB | llama.cpp | 11/12, **113 s median** | 71 % |
+| **Qwen3.8-35B-A3B Distill Q2_K** | **13.84 GB** | llama.cpp | **6/6**, **29 s median** | **70 %** |
+| Qwen3.8-35B-A3B Distill IQ3_M | 16.34 GB | llama.cpp | **6/6**, 29 s median | 81 % |
 | **Ternary Bonsai 2 27B** `PQ2_0` (2.13-bit) | **7.21 GB** | llama.cpp (PrismML fork) | **6/6**, 254 s median | **45 %** |
 | Ternary Bonsai 2 27B `PTQ1_0` (1.75-bit) | **5.95 GB** | llama.cpp (PrismML fork) | **6/6**, 285 s median | **43 %** |
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6**, 57 s median | **39 %** |
@@ -34,6 +36,14 @@ send.
 | Qwen3.6-35B-A3B 3-bit, thinking | 15.20 GB | MLX (LM Studio) | 3/4, 177 s median | 84 % |
 | Devstral-Small-2-24B | 12.76 GB | llama.cpp | 2/2, 132 s median | — |
 | Gemma 4 12B MLX-4bit | 6.74 GB | MLX | **0/6** — engine defect | — |
+
+**The fastest configuration here is a 2-bit MoE.** Qwen3.8-35B-A3B-Distill — Qwen3.8
+distilled into the Qwen3.6-35B-A3B architecture, ~3 B active of 35 B — finishes the repair
+task at a **29 s median, 6/6, zero malformed tool calls**, at 70 % of memory. It takes the
+record from the previous best at *lower* memory, and it does it purely on throughput: 1,186
+tok/s prefill against a dense 27B's 251.6. Its IQ3_M sibling has the identical median; the
+extra 2.5 GB buys a tighter tail (5–8 steps instead of 7–9), not speed, and pushes the peak
+to 81 %. Take the smaller file and spend the headroom on context.
 
 **The fastest model in the set is the one that stops thinking.** Qwen3.6-35B-A3B is the
 same weights in both rows above. With its reasoning block it is the slowest entry and drops

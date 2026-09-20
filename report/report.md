@@ -2,7 +2,7 @@
 
 *Field notes — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Nine models, 530 tool calls, six to twelve identical runs per configuration. Every model aced the
+Ten models, 603 tool calls, six to twelve identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
 desktop as the only warning macOS ever gave, and sixteen confident conclusions I had to
@@ -1127,6 +1127,72 @@ on AC, with `TCPKeepAlive=active`. An active Metal workload is not activity. Re-
 
 ---
 
+## Finding 16 — The fastest configuration here is a 2-bit MoE, and the extra bits buy consistency rather than speed
+
+Finding 15 spent a lot of memory-for-latency arithmetic on a dense 27B. The counter-example
+arrived from the other direction:
+[Qwen3.8-35B-A3B-Distill](https://huggingface.co/empero-ai/Qwen3.8-35B-A3B-Distill-GGUF)
+(empero-ai) distils the Qwen3.8 models *into* the Qwen3.6-35B-A3B MoE architecture — 30
+Gated DeltaNet plus 10 full-attention layers, 256 experts routed 8 per token, ~3 B active.
+`kvcalc` reads it as 20 KB/token, the same cheap KV as the 35B-A3B row above.
+
+Both 3-bit-class packings got the standard six runs, `--reasoning off`, 32k context.
+
+| | Q2_K | IQ3_M | *previous best:* Qwen3.6-35B-A3B 3-bit, no think |
+|---|---:|---:|---:|
+| Weights | **13.84 GB** | 16.34 GB | 15.20 GB |
+| Wired peak | **16.92 GB** (70 %) | 19.34 GB (81 %) | 19.29 GB (80 %) |
+| Median | **28.6 s** | **28.6 s** | 32.5 s |
+| Range | 27.4–42.7 s | **26.8–30.6 s** | 20.5–73.0 s |
+| Verified | **6 / 6** | **6 / 6** | **6 / 6** |
+| Steps | 7–9 | **5–8** | 6–13 |
+| Schema errors | 0 / 39 | 0 / 34 | 0 / 48 |
+
+**A 2-bit quantisation is now the fastest thing in this report**, and it takes the record at
+*lower* memory than the model it displaces: 70 % against 80 %. On the paired 7,084-token
+prompt it prefills at 1,186 tok/s against the dense 27B's 251.6 and decodes at 72.7 against
+17.1. The agent prompt that costs the dense model 28 seconds costs this one six.
+
+None of that is cleverness. The step counts are ordinary — 7 to 9, no better than anything
+else here. The entire margin is throughput, and the throughput is 3 B active parameters
+instead of 27 B dense. That is Finding 4's rule, restated one more time: **select on active
+parameters, not on file size.** These two files are within 2.5 GB of the dense 27B and
+finish the same task seven times faster.
+
+### The extra bits do buy something — just not what I expected
+
+I loaded IQ3_M expecting it to be faster, and predicted it would not fit. Both were wrong.
+
+It fits: 19.34 GB against the ~19.8 GB I projected. And it is not faster — the medians are
+identical to the tenth of a second, because the two files are the same model at the same
+active-parameter count, so they stream at the same rate. What the extra 2.5 GB buys is
+**consistency**: 5–8 steps instead of 7–9, 34 tool calls instead of 39, and a range of
+26.8–30.6 s against Q2_K's 27.4–42.7 s. Q2_K's slow run took 9 steps and 42.7 s; IQ3_M
+never had one.
+
+So the better quantisation converges in fewer turns, and the saved turns exactly cancel
+against nothing — the median does not move because there was no throughput to gain. You pay
+2.42 GB for a tighter tail.
+
+> **On 24 GB that is the wrong end of the trade.** IQ3_M peaked at 19.34 GB, and one sample
+> in 92 crossed the 19.2 GB line where Finding 8 puts the wired step function and Finding 10
+> puts the IOGPU panic. Q2_K delivers the same median with eleven points of headroom. Take
+> Q2_K, and spend the headroom on context instead: at 64k it measures 17.37 GB, still 72 %.
+
+### And the 2-bit quality collapse did not happen
+
+Going in, I expected Q2_K to be the row where tool calling falls apart — that is the
+documented failure mode below 3 bits, and Bonsai's own model card measures a conventional
+IQ2_XXS build of Qwen3.8-27B at 72.59 against 84.78 for its ternary format. The warning was
+reasonable and it was wrong here: **zero malformed tool calls in 39**, the test file
+byte-identical in all six runs, 22/22 passing every time.
+
+Two sub-4-bit builds in two findings, both holding. The honest conclusion is not "low-bit is
+fine" but that the collapse threshold is not where the bit count alone predicts, and the
+only way to know for a given checkpoint is to run the task.
+
+---
+
 ## Corrections
 
 Sixteen conclusions had to be retracted. They are here because the pattern transfers better
@@ -1202,6 +1268,6 @@ configuration against a second model — took eleven minutes when I finally ran 
 
 ---
 
-*Findings 1–14 measured on one machine on one day; Finding 15 in a later session on the
-same machine and OS build. Six runs per configuration — enough to tell 3/6 from 6/6, not
+*Findings 1–14 measured on one machine on one day; Findings 15 and 16 in a later session on
+the same machine and OS build. Six runs per configuration — enough to tell 3/6 from 6/6, not
 enough to tell 5/6 from 6/6, and not enough to separate two medians 30 s apart.*
