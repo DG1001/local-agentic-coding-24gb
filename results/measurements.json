@@ -1176,6 +1176,249 @@
           "wall_s": 30.4
         }
       ]
+    },
+    "Ornith-1.5-35B-A3B-Q2_K": {
+      "runtime": "llama.cpp (GGUF) via Homebrew llama-server build 10210, --reasoning off",
+      "quant": "bartowski Q2_K",
+      "weights_gb": 13.09,
+      "context_granted": 32768,
+      "parallel": 1,
+      "passed": 5,
+      "of": 6,
+      "median_s": 177.1,
+      "range_s": [
+        34.8,
+        325.7
+      ],
+      "tool_calls": 120,
+      "schema_errors": 0,
+      "tests_untouched": "6/6",
+      "steps": [
+        6,
+        30
+      ],
+      "wired_peak_gb": 20.13,
+      "thinking": false,
+      "failure": "run 1 hit the 30-step limit at 16/22",
+      "note": "Same qwen3_5_moe architecture and KV cost as the Distill rows, coding-tuned by ornith-ai (MIT). Without the reasoning block it converges by rewriting duration.py whole and re-testing, up to nine writes in a run; four of six runs took 21-30 steps and the long contexts drove wired to 84%.",
+      "runs": [
+        {
+          "steps": 30,
+          "bash": 21,
+          "write": 9,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": false,
+          "wall_s": 325.7
+        },
+        {
+          "steps": 30,
+          "bash": 24,
+          "write": 5,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 233.5
+        },
+        {
+          "steps": 7,
+          "bash": 7,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 36.4
+        },
+        {
+          "steps": 6,
+          "bash": 6,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 34.8
+        },
+        {
+          "steps": 21,
+          "bash": 15,
+          "write": 5,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 145.8
+        },
+        {
+          "steps": 27,
+          "bash": 19,
+          "write": 7,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 208.3
+        }
+      ]
+    },
+    "Ornith-1.5-35B-A3B-Q2_K-think": {
+      "runtime": "llama.cpp (GGUF) via Homebrew llama-server build 10210, --reasoning on",
+      "quant": "bartowski Q2_K",
+      "weights_gb": 13.09,
+      "context_granted": 32768,
+      "parallel": 1,
+      "passed": 5,
+      "of": 6,
+      "median_s": 96.4,
+      "range_s": [
+        66.8,
+        116.3
+      ],
+      "tool_calls": 33,
+      "schema_errors": 0,
+      "tests_untouched": "6/6",
+      "steps": [
+        4,
+        7
+      ],
+      "wired_peak_gb": 16.26,
+      "thinking": true,
+      "failure": "run 4 spent the full 4096-token output budget inside the reasoning block and ended the turn without a tool call (finish_reason length); the harness stops on a turn without tool calls",
+      "note": "With the reasoning block the edits are targeted (4-7 steps), and memory stays at 68%. At 128k with thinking it measures 17.82 GB (74%).",
+      "runs": [
+        {
+          "steps": 6,
+          "bash": 4,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 112.5
+        },
+        {
+          "steps": 5,
+          "bash": 5,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 102.3
+        },
+        {
+          "steps": 6,
+          "bash": 4,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 90.5
+        },
+        {
+          "steps": 4,
+          "bash": 3,
+          "write": 0,
+          "schema_errors": 0,
+          "length_stops": 1,
+          "green": false,
+          "wall_s": 116.3
+        },
+        {
+          "steps": 7,
+          "bash": 6,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 66.8
+        },
+        {
+          "steps": 6,
+          "bash": 6,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 72.3
+        }
+      ]
+    },
+    "Qwen3.8-35B-A3B-Distill-Q2_K-think": {
+      "runtime": "llama.cpp (GGUF) via Homebrew llama-server build 10210, --reasoning on",
+      "quant": "Q2_K",
+      "weights_gb": 13.84,
+      "context_granted": 32768,
+      "parallel": 1,
+      "passed": 5,
+      "of": 6,
+      "median_s": 64.0,
+      "range_s": [
+        53.6,
+        94.2
+      ],
+      "tool_calls": 42,
+      "schema_errors": 0,
+      "tests_untouched": "6/6",
+      "steps": [
+        4,
+        16
+      ],
+      "wired_peak_gb": 16.71,
+      "thinking": true,
+      "failure": "run 5 spent the full 4096-token output budget inside the reasoning block and ended the turn without a tool call -- the same mechanism as Ornith's run 4",
+      "note": "The configuration Finding 16 recommended for interactive use, measured on repair_task for the first time. Thinking costs 2.2x on the median (28.6 -> 64.0 s) and introduces a 1-in-6 length stop at the harness's 4096-token output cap.",
+      "runs": [
+        {
+          "steps": 7,
+          "bash": 5,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 57.5
+        },
+        {
+          "steps": 7,
+          "bash": 5,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 73.2
+        },
+        {
+          "steps": 16,
+          "bash": 13,
+          "write": 2,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 94.2
+        },
+        {
+          "steps": 7,
+          "bash": 5,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 53.6
+        },
+        {
+          "steps": 4,
+          "bash": 3,
+          "write": 0,
+          "schema_errors": 0,
+          "length_stops": 1,
+          "green": false,
+          "wall_s": 69.3
+        },
+        {
+          "steps": 7,
+          "bash": 5,
+          "write": 1,
+          "schema_errors": 0,
+          "length_stops": 0,
+          "green": true,
+          "wall_s": 58.6
+        }
+      ]
     }
   },
   "kv_cache": {
@@ -1591,7 +1834,10 @@
       "Q2_K / reasoning off / vague": "6/12",
       "Q2_K / reasoning off / explicit": "12/12",
       "Q2_K / reasoning on  / vague": "12/12",
-      "IQ3_M / reasoning off / vague": "12/12"
+      "IQ3_M / reasoning off / vague": "12/12",
+      "Ornith Q2_K / reasoning off / vague": "12/12",
+      "Ornith Q2_K / reasoning off / explicit": "12/12",
+      "Ornith Q2_K / reasoning on  / vague": "12/12"
     },
     "finding": "Three independent levers, each on its own sufficient: more bits, a reasoning block, or an explicit instruction. The failure needs all three weaknesses at once. This is why the repair task showed 0 schema errors on the same weights with reasoning off -- its task text names the command to run.",
     "caveat": "A different failure mode from the schema errors counted elsewhere. Here the arguments are never malformed; no tool call is emitted at all and the model narrates the call in prose (\"Ich werde jetzt die Dateien mit dem Werkzeug glob betrachten\"), sometimes claiming work it never did. The harness counts this as a turn without tool calls, not as an error."

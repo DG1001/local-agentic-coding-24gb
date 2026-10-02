@@ -3,7 +3,7 @@
 Measurements and tooling for one question: which local model is actually usable for
 agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Ten models, 603 tool calls, six to twelve identical runs per configuration, measured on an Apple
+Eleven models, 798 tool calls, six to twelve identical runs per configuration, measured on an Apple
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
@@ -27,6 +27,9 @@ send.
 | Qwen3.8-27B IQ4_XS, no thinking | 14.25 GB | llama.cpp | 11/12, **113 s median** | 71 % |
 | **Qwen3.8-35B-A3B Distill Q2_K** | **13.84 GB** | llama.cpp | **6/6**, **29 s median** | **70 %** |
 | Qwen3.8-35B-A3B Distill IQ3_M | 16.34 GB | llama.cpp | **6/6**, 29 s median | 81 % |
+| Qwen3.8-35B-A3B Distill Q2_K, thinking on | 13.84 GB | llama.cpp | 5/6, 64 s median | 70 % |
+| Ornith-1.5-35B-A3B Q2_K, thinking on | 13.09 GB | llama.cpp | 5/6, 96 s median | 68 % |
+| Ornith-1.5-35B-A3B Q2_K | 13.09 GB | llama.cpp | 5/6, 177 s median | 84 % |
 | **Ternary Bonsai 2 27B** `PQ2_0` (2.13-bit) | **7.21 GB** | llama.cpp (PrismML fork) | **6/6**, 254 s median | **45 %** |
 | Ternary Bonsai 2 27B `PTQ1_0` (1.75-bit) | **5.95 GB** | llama.cpp (PrismML fork) | **6/6**, 285 s median | **43 %** |
 | **Qwen3.5-9B 4-bit** | **5.95 GB** | MLX | **5/6**, 57 s median | **39 %** |
@@ -51,6 +54,13 @@ type in the tenth turn — the 2-bit build stopped emitting tool calls in half o
 and narrated them in prose instead. Three independent levers each fix it: more bits, a
 reasoning block, or a specific instruction. `repair_task` never saw it because its task text
 names the command to run. Keep the thinking on.
+
+**Keeping it costs 2.2×, and a better model card did not help.** With the reasoning block the
+same Distill needs 64 s instead of 29, and one run in six spends the whole 4,096-token output
+budget thinking and stops without acting. Ornith-1.5-35B-A3B — same architecture, coding-tuned,
+15 points ahead on Terminal-Bench by its own card — lost in both modes: 177 s and 96 s, 5/6 each.
+Without thinking it rewrote the whole file up to nine times per run. Its one real edge: it acts
+on vague prompts even without the reasoning block. Choose the mode by how you prompt.
 
 **The fastest model in the set is the one that stops thinking.** Qwen3.6-35B-A3B is the
 same weights in both rows above. With its reasoning block it is the slowest entry and drops
@@ -124,6 +134,7 @@ failure and was not.
 | Model answers correctly but `-ngl 99` does nothing and wired stays at baseline | Metal shader compile failed on M5; set `GGML_METAL_TENSOR_DISABLE=1` | Finding 15 |
 | An unattended benchmark is ~20x slower overnight | macOS Idle Sleep cycling 900 s at a time — an active Metal workload is not activity. The runners in `bench/` now hold the assertion themselves | Finding 15 |
 | Model answers in prose, "I will now use the tool X", and never calls it | Low-bit build with reasoning off and a vague prompt — any one of: more bits, `--reasoning on`, or a specific instruction | Finding 16 |
+| Agent stops after a long thinking block, no tool call, `finish_reason: length` | The reasoning block used up the whole output budget. Raise `max_tokens` above 4,096 — both 35B-A3B models hit this once in six | Finding 17 |
 | `Model type nanbeige not supported` | LM Studio's MLX runtime predates the architecture; upstream llama.cpp runs it | Finding 6 |
 | `llama-server exited before becoming healthy, exitCode=1` | LM Studio's bundled llama.cpp is too old — `lms runtime update` still says "up-to-date" | Finding 6 |
 | `<\|channel>thought` repeating until the token limit | LM Studio's MLX path does not strip Gemma 4's channel markers; GGUF does | Finding 6 |

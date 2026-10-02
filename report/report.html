@@ -396,7 +396,7 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Ten models, 603 tool calls, six to twelve identical runs per configuration. Every model
+    <p class="standfirst">Eleven models, 798 tool calls, six to twelve identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
@@ -1908,7 +1908,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
       survives <code>--reasoning off</code>, but at 81 % wired it cannot also hold 128k of context.
       <code>Q2_K</code> with the reasoning block on measures <strong>18.67 GB (78 %) at 128k</strong> and
       answers reliably, so the recommendation stands with one word changed: take the smaller file, keep
-      the thinking.</p>
+      the thinking. Finding 17 measures what keeping it costs.</p>
     </div>
 
     <div class="col">
@@ -1921,6 +1921,81 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
       <p>Two sub-4-bit builds in two findings, both holding. The honest conclusion is not "low-bit is fine"
       but that the collapse threshold is not where the bit count alone predicts, and the only way to know
       for a given checkpoint is to run the task.</p>
+    </div>
+  </section>
+
+  <section id="ornith">
+    <div class="col">
+      <h2><span class="num">Finding 17</span>The sibling with the better model card loses here, and keeping the thinking has a price</h2>
+      <p><a href="https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B">Ornith-1.5-35B-A3B</a> (ornith-ai, MIT)
+      is the obvious challenger to Finding 16's winner: the same <code>qwen3_5_moe</code> architecture, the
+      same 20 KB/token KV, 0.75 GB lighter as a Q2_K, and tuned for exactly this work. Its model card
+      reports Terminal-Bench 2.1 at 67.8 against 52.5 and SWE-bench Verified at 79 against 73.4, both
+      against the base Qwen3.6-35B-A3B. It loads on the same llama.cpp build without changes.</p>
+      <p>It also forced a measurement Finding 16 had skipped. That finding recommended keeping the
+      reasoning block on for interactive use, but had only ever run <code>repair_task</code> with it off.
+      Both models got six runs in both modes, 32k context, same harness:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Same architecture, same quantisation level, both reasoning modes</caption>
+        <thead><tr><th></th><th class="num">Distill, think off</th><th class="num">Distill, think on</th><th class="num">Ornith, think off</th><th class="num">Ornith, think on</th></tr></thead>
+        <tbody>
+          <tr><th>Verified</th><td class="num"><span class="pill ok">6 / 6</span></td><td class="num"><span class="pill mid">5 / 6</span></td><td class="num"><span class="pill mid">5 / 6</span></td><td class="num"><span class="pill mid">5 / 6</span></td></tr>
+          <tr><th>Median</th><td class="num"><strong>28.6 s</strong></td><td class="num">64.0 s</td><td class="num">177.1 s</td><td class="num">96.4 s</td></tr>
+          <tr><th>Range</th><td class="num">27.4–42.7 s</td><td class="num">53.6–94.2 s</td><td class="num">34.8–325.7 s</td><td class="num">66.8–116.3 s</td></tr>
+          <tr><th>Steps</th><td class="num">7–9</td><td class="num">4–16</td><td class="num">6–30</td><td class="num">4–7</td></tr>
+          <tr><th>Tool calls</th><td class="num">39</td><td class="num">42</td><td class="num">120</td><td class="num">33</td></tr>
+          <tr><th>Wired peak</th><td class="num">16.92 GB (70 %)</td><td class="num">16.71 GB (70 %)</td><td class="num"><span class="pill bad">20.13 GB (84 %)</span></td><td class="num">16.26 GB (68 %)</td></tr>
+          <tr><th>Vague prompt</th><td class="num"><span class="pill bad">6 / 12</span></td><td class="num">12 / 12</td><td class="num"><strong>12 / 12</strong></td><td class="num"><strong>12 / 12</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>On this machine the model card does not transfer.</strong> The Distill wins
+      <code>repair_task</code> in both modes: 28.6 s against 177.1 without thinking, 64.0 s against 96.4 with
+      it. Zero schema errors across all 234 tool calls in the table — nothing here failed by breaking the
+      format.</p>
+
+      <h3>Without thinking, Ornith converges by rewriting</h3>
+      <p>Four of its six runs took 21 to 30 steps, and one hit the 30-step limit at 16/22. The pattern is
+      <code>write</code>, <code>bash</code>, <code>write</code>, <code>bash</code> — <code>duration.py</code>
+      rewritten whole, up to nine times in a run, each time 1,600–1,900 tokens, re-tested, rewritten again,
+      instead of three targeted fixes. Two runs took 35 seconds like the Distill does; four did not. The long
+      ones filled 30,175 of 32,768 context tokens, and that is where the 84 % peak came from — the Distill,
+      finishing in 7–9 steps, never got near a full context.</p>
+      <p>With the reasoning block on, the same model is targeted — 4 to 7 steps, 33 tool calls in total —
+      and stays at 68 %. The edits get better; the clock does not.</p>
+
+      <h3>Keeping the thinking costs 2.2× and a length stop, on both models</h3>
+      <p>The Distill with thinking on: <strong>64.0 s against 28.6</strong>, and one red run. Ornith with
+      thinking on: one red run. Both red runs are the same failure: <strong>four steps, no write, the full
+      4,096-token output budget spent inside the reasoning block, <code>finish_reason: length</code>, no tool
+      call.</strong> The harness reads a turn without tool calls as the end and stops at the starting 15/22.</p>
+      <p>So that is not a model defect but an interaction between a reasoning block and the output cap every
+      row in this report was measured under. jaja treats it as a "degenerate turn" and nudges the model;
+      <code>realagent.py</code> simply stops. At jaja's 8,192 it would probably not occur — unmeasured, and
+      stated as such.</p>
+    </div>
+
+    <div class="callout key">
+      <div class="label">Finding 16 said: take the smaller file, keep the thinking. The second half has a price.</div>
+      <p>It buys 12/12 on vague prompts and costs 2.2× on the median plus a one-in-six length stop at 4,096
+      output tokens. Choose by how you prompt: scripted, explicit tasks — thinking off, 28.6 s, 6/6.
+      Interactive "carry on" — thinking on, and give it a larger output budget than 4,096.</p>
+    </div>
+
+    <div class="col">
+      <h3>Ornith's one real advantage</h3>
+      <p>It acts on vague prompts without the reasoning block: <strong>12/12</strong>, where the Distill
+      dropped to 6/12. It calls tools rather than narrating them in every configuration measured. That is a
+      genuine property — it is just not the one <code>repair_task</code> rewards.</p>
+      <p>Why the vendor numbers do not arrive is a hypothesis, not a measurement: a model that leans on long
+      reasoning loses most under a 2-bit quantisation and a 4,096-token output budget, and those are
+      precisely the two constraints a 24 GB machine imposes. The Distill solves the task efficiently without
+      thinking at all, and on this hardware that is the more useful property.</p>
     </div>
   </section>
 
@@ -1945,6 +2020,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
           <tr><th>Ternary Bonsai 2 27B <em>gguf, PQ2_0</em></th><td class="num">7.21 GB</td><td class="num">10.92 GB <em>meas.</em></td><td class="num">45 %</td><td><span class="pill ok">6/6, the faster packing</span></td></tr>
           <tr><th>Qwen3.8-35B-A3B Distill <em>gguf, Q2_K</em></th><td class="num">13.84 GB</td><td class="num">16.92 GB <em>meas.</em></td><td class="num">70 %</td><td><span class="pill ok">6/6, fastest here</span></td></tr>
           <tr><th>Qwen3.8-35B-A3B Distill <em>gguf, IQ3_M</em></th><td class="num">16.34 GB</td><td class="num">19.34 GB <em>meas.</em></td><td class="num">81 %</td><td><span class="pill mid">6/6, but touches the 80 % band</span></td></tr>
+          <tr><th>Ornith-1.5-35B-A3B <em>gguf, Q2_K</em></th><td class="num">13.09 GB</td><td class="num">16.26 GB <em>meas.</em></td><td class="num">68 %</td><td><span class="pill mid">5/6, slower than the Distill</span></td></tr>
           <tr><th>Qwen3.8-27B UD-Q4_K_M <em>gguf</em></th><td class="num">16.46 GB</td><td class="num">~20 GB</td><td class="num">83 %</td><td><span class="pill bad">same band as the guardrail block</span></td></tr>
           <tr><th>Devstral-Small-2-24B 4-bit</th><td class="num">15.10 GB</td><td class="num">—</td><td class="num">—</td><td><span class="pill bad">worse ceiling</span></td></tr>
           <tr><th>Qwen3.6-35B-A3B 3-bit</th><td class="num">15.20 GB</td><td class="num">19.29 GB <em>meas.</em></td><td class="num">80 %</td><td><span class="pill bad">3/6 under load</span></td></tr>
@@ -2189,6 +2265,9 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
     the <code>Q2_K</code> and <code>IQ3_M</code> packings, on the Homebrew <code>llama-server</code>
     build 10210 with <code>--reasoning off</code>. That build loads the Gated DeltaNet MoE architecture
     without a forked binary; the model card's warning about older builds did not bite here.</p>
+    <p>Finding 17 is from a further session on the same machine and build:
+    <code>bartowski/Ornith-1.5-35B-A3B-GGUF</code> at <code>Q2_K</code>, and the Distill's <code>Q2_K</code>
+    again, each in both reasoning modes.</p>
     <p>The harness was a ~180-line Python loop talking directly to the OpenAI-compatible endpoint,
     validating tool arguments against the declared schema itself. It exists because the coding agent had
     to be ruled out as a variable — which, twice, it turned out to be. The repair task used the same loop

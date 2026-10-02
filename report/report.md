@@ -2,7 +2,7 @@
 
 *Field notes — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Ten models, 603 tool calls, six to twelve identical runs per configuration. Every model aced the
+Eleven models, 798 tool calls, six to twelve identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
 desktop as the only warning macOS ever gave, and sixteen confident conclusions I had to
@@ -1215,6 +1215,7 @@ For a 24 GB machine that settles the packing question from the other side. `IQ3_
 `--reasoning off`, but at 81 % wired it cannot also hold 128k of context. `Q2_K` with the
 reasoning block on measures **18.67 GB (78 %) at 128k** and answers reliably, so the
 recommendation stands with one word changed: take the smaller file, keep the thinking.
+Finding 17 measures what keeping it costs.
 
 ### And the 2-bit quality collapse did not happen
 
@@ -1227,6 +1228,74 @@ byte-identical in all six runs, 22/22 passing every time.
 Two sub-4-bit builds in two findings, both holding. The honest conclusion is not "low-bit is
 fine" but that the collapse threshold is not where the bit count alone predicts, and the
 only way to know for a given checkpoint is to run the task.
+
+---
+
+## Finding 17 — The sibling with the better model card loses here, and keeping the thinking has a price
+
+[Ornith-1.5-35B-A3B](https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B) (ornith-ai, MIT) is the
+obvious challenger to Finding 16's winner: the same `qwen3_5_moe` architecture, the same 20
+KB/token KV, 0.75 GB lighter as a Q2_K, and tuned for exactly this work. Its model card reports
+Terminal-Bench 2.1 at 67.8 against 52.5 and SWE-bench Verified at 79 against 73.4, both against
+the base Qwen3.6-35B-A3B. It loads on the same llama.cpp build without changes.
+
+It also forced a measurement Finding 16 had skipped. That finding recommended keeping the
+reasoning block on for interactive use, but had only ever run `repair_task` with it off. Both
+models got six runs in both modes, 32k context, same harness:
+
+| | Distill, think off | Distill, think on | Ornith, think off | Ornith, think on |
+|---|---:|---:|---:|---:|
+| Verified | **6 / 6** | 5 / 6 | 5 / 6 | 5 / 6 |
+| Median | **28.6 s** | 64.0 s | 177.1 s | 96.4 s |
+| Range | 27.4–42.7 s | 53.6–94.2 s | 34.8–325.7 s | 66.8–116.3 s |
+| Steps | 7–9 | 4–16 | 6–30 | 4–7 |
+| Tool calls | 39 | 42 | 120 | 33 |
+| Wired peak | 16.92 GB (70 %) | 16.71 GB (70 %) | 20.13 GB (**84 %**) | 16.26 GB (68 %) |
+| Vague prompt | 6 / 12 | 12 / 12 | **12 / 12** | **12 / 12** |
+
+**On this machine the model card does not transfer.** The Distill wins `repair_task` in both
+modes: 28.6 s against 177.1 without thinking, 64.0 s against 96.4 with it. Zero schema errors
+across all 234 tool calls in the table — nothing here failed by breaking the format.
+
+### Without thinking, Ornith converges by rewriting
+
+Four of its six runs took 21 to 30 steps, and one hit the 30-step limit at 16/22. The pattern is
+`write`, `bash`, `write`, `bash` — `duration.py` rewritten whole, up to nine times in a run, each
+time 1,600–1,900 tokens, re-tested, rewritten again, instead of three targeted fixes. Two runs
+took 35 seconds like the Distill does; four did not. The long ones filled 30,175 of 32,768 context
+tokens, and that is where the 84 % peak came from — the Distill, finishing in 7–9 steps, never got
+near a full context.
+
+With the reasoning block on, the same model is targeted — 4 to 7 steps, 33 tool calls in total —
+and stays at 68 %. The edits get better; the clock does not.
+
+### Keeping the thinking costs 2.2× and a length stop, on both models
+
+The Distill with thinking on: **64.0 s against 28.6**, and one red run. Ornith with thinking on:
+one red run. Both red runs are the same failure: **four steps, no write, the full 4,096-token
+output budget spent inside the reasoning block, `finish_reason: length`, no tool call.** The
+harness reads a turn without tool calls as the end and stops at the starting 15/22.
+
+So that is not a model defect but an interaction between a reasoning block and the output cap
+every row in this report was measured under. jaja treats it as a "degenerate turn" and nudges the
+model; `realagent.py` simply stops. At jaja's 8,192 it would probably not occur — unmeasured, and
+stated as such.
+
+> **Finding 16 said: take the smaller file, keep the thinking. The second half has a price.** It
+> buys 12/12 on vague prompts and costs 2.2× on the median plus a one-in-six length stop at 4,096
+> output tokens. Choose by how you prompt: scripted, explicit tasks — thinking off, 28.6 s, 6/6.
+> Interactive "carry on" — thinking on, and give it a larger output budget than 4,096.
+
+### Ornith's one real advantage
+
+It acts on vague prompts without the reasoning block: **12/12**, where the Distill dropped to
+6/12. It calls tools rather than narrating them in every configuration measured. That is a genuine
+property — it is just not the one `repair_task` rewards.
+
+Why the vendor numbers do not arrive is a hypothesis, not a measurement: a model that leans on
+long reasoning loses most under a 2-bit quantisation and a 4,096-token output budget, and those
+are precisely the two constraints a 24 GB machine imposes. The Distill solves the task efficiently
+without thinking at all, and on this hardware that is the more useful property.
 
 ---
 
@@ -1305,6 +1374,6 @@ configuration against a second model — took eleven minutes when I finally ran 
 
 ---
 
-*Findings 1–14 measured on one machine on one day; Findings 15 and 16 in a later session on
-the same machine and OS build. Six runs per configuration — enough to tell 3/6 from 6/6, not
+*Findings 1–14 measured on one machine on one day; Findings 15–17 in later sessions on the
+same machine and OS build. Six runs per configuration — enough to tell 3/6 from 6/6, not
 enough to tell 5/6 from 6/6, and not enough to separate two medians 30 s apart.*
