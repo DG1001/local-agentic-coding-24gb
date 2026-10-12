@@ -3,7 +3,7 @@
 Measurements and tooling for one question: which local model is actually usable for
 agentic coding on a Mac with 24 GB of unified memory — and what breaks when one isn't.
 
-Eleven models, 798 tool calls, six to twelve identical runs per configuration, measured on an Apple
+Eleven models, 860 tool calls, six to twelve identical runs per configuration, measured on an Apple
 M5 Pro under macOS 26.6. Full write-up in [`report/`](report/), raw numbers in
 [`results/measurements.json`](results/measurements.json).
 
@@ -25,6 +25,7 @@ send.
 | gpt-oss-20b MXFP4 | 12.08 GB | MLX | **6/6**, 55 s median | 67 % |
 | Qwen3.8-27B IQ4_XS | 14.25 GB | llama.cpp | **6/6**, 212 s median | 73 % |
 | Qwen3.8-27B IQ4_XS, no thinking | 14.25 GB | llama.cpp | 11/12, **113 s median** | 71 % |
+| Qwen3.8-27B GSQ-RCO IQ3_S, no thinking | **11.77 GB** | llama.cpp | 5/6, 132 s median | 71 % |
 | **Qwen3.8-35B-A3B Distill Q2_K** | **13.84 GB** | llama.cpp | **6/6**, **29 s median** | **70 %** |
 | Qwen3.8-35B-A3B Distill IQ3_M | 16.34 GB | llama.cpp | **6/6**, 29 s median | 81 % |
 | Qwen3.8-35B-A3B Distill Q2_K, thinking on | 13.84 GB | llama.cpp | 5/6, 64 s median | 70 % |
@@ -61,6 +62,11 @@ budget thinking and stops without acting. Ornith-1.5-35B-A3B — same architectu
 15 points ahead on Terminal-Bench by its own card — lost in both modes: 177 s and 96 s, 5/6 each.
 Without thinking it rewrote the whole file up to nine times per run. Its one real edge: it acts
 on vague prompts even without the reasoning block. Choose the mode by how you prompt.
+
+**For the dense 27B, the better quantisation is GSQ.** ISTA-DASLab's GSQ-RCO build of Qwen3.8-27B
+at 3.4 bits matches the 4-bit IQ4_XS on the repair task in 2.5 GB less, and prefills faster — which
+also confirms that the ternary build's prefill penalty is ternary-specific, not a low-bit effect.
+It is still a dense 27B, 4.6× behind the 3 B-active MoE.
 
 **The fastest model in the set is the one that stops thinking.** Qwen3.6-35B-A3B is the
 same weights in both rows above. With its reasoning block it is the slowest entry and drops

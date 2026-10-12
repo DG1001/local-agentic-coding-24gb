@@ -1419,6 +1419,87 @@
           "wall_s": 58.6
         }
       ]
+    },
+    "Qwen3.8-27B-GSQ-RCO-IQ3_S": {
+      "_comment": "ISTA-DASLab's GSQ-RCO build of the same Qwen3.8-27B as the IQ4_XS and Bonsai rows. GSQ learns per-coordinate grid assignments and group scales via Gumbel-Softmax; RCO assigns a standard llama.cpp type to each tensor under a size budget. Stock GGUF, no special build.",
+      "runtime": "llama.cpp (GGUF) via Homebrew llama-server build 10210, --reasoning off",
+      "quant": "GSQ-RCO IQ3_S",
+      "bits_per_weight_nominal": 3.44,
+      "weights_gb": 11.77,
+      "context_granted": 32768,
+      "parallel": 1,
+      "passed": 5,
+      "of": 6,
+      "median_s": 132.4,
+      "median_green_s": 79.1,
+      "range_s": [
+        60.8,
+        530.9
+      ],
+      "tool_calls": 62,
+      "schema_errors": 0,
+      "tests_untouched": "6/6",
+      "steps": [
+        4,
+        30
+      ],
+      "wired_peak_gb": 16.98,
+      "wired_at_64k_gb": 18.45,
+      "thinking": false,
+      "prefill_tok_s_paired_7085": 285.1,
+      "decode_tok_s": 17.4,
+      "failure": "run 1: 30 bash calls, 0 writes, duration.py untouched, step limit at 15/22 -- the same signature as run 4 of Qwen3.8-27B-UD-IQ4_XS-nothink",
+      "note": "Three of five green runs repaired the file through bash rather than the write tool, in 4-5 steps.",
+      "runs": [
+        {
+          "steps": 30,
+          "bash": 30,
+          "write": 0,
+          "schema_errors": 0,
+          "green": false,
+          "wall_s": 530.9
+        },
+        {
+          "steps": 4,
+          "bash": 3,
+          "write": 0,
+          "schema_errors": 0,
+          "green": true,
+          "wall_s": 66.9
+        },
+        {
+          "steps": 13,
+          "bash": 11,
+          "write": 1,
+          "schema_errors": 0,
+          "green": true,
+          "wall_s": 185.8
+        },
+        {
+          "steps": 4,
+          "bash": 3,
+          "write": 0,
+          "schema_errors": 0,
+          "green": true,
+          "wall_s": 60.8
+        },
+        {
+          "steps": 5,
+          "bash": 4,
+          "write": 0,
+          "schema_errors": 0,
+          "green": true,
+          "wall_s": 79.1
+        },
+        {
+          "steps": 11,
+          "bash": 9,
+          "write": 1,
+          "schema_errors": 0,
+          "green": true,
+          "wall_s": 196.2
+        }
+      ]
     }
   },
   "kv_cache": {
@@ -1827,7 +1908,7 @@
     }
   },
   "tool_call_under_vague_prompts": {
-    "_comment": "Follow-up to Finding 16, prompted by an interactive session that stalled where the repair task did not. Twelve samples per cell, identical system prompt, jaja's six-tool surface (glob/grep/read/write/edit/bash), 32k context, temperature 0.6. Counted: turns that emitted at least one tool call, against turns that answered in prose instead.",
+    "_comment": "Follow-up to Finding 16, prompted by an interactive session that stalled where the repair task did not. Twelve samples per cell, identical system prompt, jaja's six-tool surface (glob/grep/read/write/edit/bash), 32k context, temperature 0.6. Counted: turns that emitted at least one tool call, against turns that answered in prose instead. Reproducible with bench/vagueprobe.py.",
     "vague_prompt": "schau dir die daten an und mach weiter",
     "explicit_prompt": "Lies zuerst sketch.js mit dem read-Werkzeug. Rufe jetzt ein Werkzeug auf.",
     "cells": {
@@ -1837,7 +1918,8 @@
       "IQ3_M / reasoning off / vague": "12/12",
       "Ornith Q2_K / reasoning off / vague": "12/12",
       "Ornith Q2_K / reasoning off / explicit": "12/12",
-      "Ornith Q2_K / reasoning on  / vague": "12/12"
+      "Ornith Q2_K / reasoning on  / vague": "12/12",
+      "Qwen3.8-27B GSQ-RCO IQ3_S / reasoning off / vague": "12/12"
     },
     "finding": "Three independent levers, each on its own sufficient: more bits, a reasoning block, or an explicit instruction. The failure needs all three weaknesses at once. This is why the repair task showed 0 schema errors on the same weights with reasoning off -- its task text names the command to run.",
     "caveat": "A different failure mode from the schema errors counted elsewhere. Here the arguments are never malformed; no tool call is emitted at all and the model narrates the call in prose (\"Ich werde jetzt die Dateien mit dem Werkzeug glob betrachten\"), sometimes claiming work it never did. The harness counts this as a turn without tool calls, not as an error."

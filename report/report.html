@@ -396,7 +396,7 @@
   <header>
     <div class="eyebrow">Field notes — Apple M5 Pro, 24 GB</div>
     <h1>Local agentic coding on a 24 GB Mac: the system prompt is the benchmark</h1>
-    <p class="standfirst">Eleven models, 798 tool calls, six to twelve identical runs per configuration. Every model
+    <p class="standfirst">Eleven models, 860 tool calls, six to twelve identical runs per configuration. Every model
     aced the task in isolation. What separated them was a five-thousand-token system prompt — the thing
     every real coding agent sends. All three then repaired a genuinely broken module — 6/6, 3/4 and 2/2,
     at 55, 177 and 132 seconds. Along the way: one kernel panic, a flickering desktop as the only warning
@@ -1735,6 +1735,72 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
     </div>
 
     <div class="col">
+      <h3>A third point on the axis: GSQ at 3 bits, and what it says about ternary</h3>
+      <p>A later session added the point between ternary and 4-bit:
+      <a href="https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF">Qwen3.8-27B-GSQ-RCO</a> from
+      ISTA-DASLab. GSQ learns the per-coordinate grid assignments and group scales by Gumbel-Softmax
+      relaxation; RCO then picks a standard llama.cpp type for each tensor under a total size budget. The
+      result is a stock GGUF — no fork, no special build — at <code>IQ3_S</code>, nominally 3.44 bits per
+      weight and 11.77 GB.</p>
+      <p>Prefill is independent of the reasoning mode, so the throughput comparison holds across all
+      three:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>The same Qwen3.8-27B at three bit-widths</caption>
+        <thead><tr><th></th><th class="num">ternary <code>PQ2_0</code></th><th class="num">GSQ-RCO <code>IQ3_S</code></th><th class="num">UD-IQ4_XS</th></tr></thead>
+        <tbody>
+          <tr><th>Bits per weight</th><td class="num">2.13</td><td class="num">~3.44</td><td class="num">~4.25</td></tr>
+          <tr><th>Weights</th><td class="num">7.21 GB</td><td class="num">11.77 GB</td><td class="num">14.25 GB</td></tr>
+          <tr><th>Prefill, 7k prompt</th><td class="num"><span class="pill bad">103.9 tok/s</span></td><td class="num"><strong>285.1 tok/s</strong></td><td class="num">251.6 tok/s</td></tr>
+          <tr><th>Decode</th><td class="num">23.6 tok/s</td><td class="num">17.4 tok/s</td><td class="num">16.9 tok/s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>This settles the objection from the other side.</strong> A conventional-format 3-bit build
+      prefills as fast as the 4-bit one — faster, in fact — while the ternary build at 2.13 bits sits at
+      well under half. Prefill does not degrade smoothly with bit-width; it falls off a cliff at ternary.
+      The penalty belongs to the ternary matmul path, which is what the packing comparison above concluded
+      with only two points. (The IQ4_XS figure came through LM Studio's llama.cpp and the others through
+      other builds, so the 285 against 252 is not a meaningful gap; the gap to 104 is.)</p>
+      <p><code>repair_task</code> ran with the reasoning block off, so the comparison row is the IQ4_XS
+      without it:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Reasoning block off, same harness</caption>
+        <thead><tr><th></th><th class="num">GSQ-RCO <code>IQ3_S</code></th><th class="num">UD-IQ4_XS</th></tr></thead>
+        <tbody>
+          <tr><th>Verified</th><td class="num"><span class="pill mid">5 / 6</span></td><td class="num"><span class="pill mid">11 / 12</span></td></tr>
+          <tr><th>Median</th><td class="num">132.4 s</td><td class="num">113.0 s</td></tr>
+          <tr><th>Median of green runs</th><td class="num"><strong>79.1 s</strong></td><td class="num">111.2 s</td></tr>
+          <tr><th>Wired peak</th><td class="num"><strong>16.98 GB</strong> at 32k</td><td class="num">17.11 GB at 16k</td></tr>
+          <tr><th>Vague prompt</th><td class="num">12 / 12</td><td class="num">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p><strong>GSQ keeps what it promises.</strong> 2.48 GB less on disk, twice the context at slightly
+      less wired memory, and the green runs are faster. Its one red run is not a quantisation artefact:
+      thirty <code>bash</code> calls, no write, the file untouched, the step limit at 15/22 — the exact
+      signature of the IQ4_XS's own failure, on the same base model. One in six against one in twelve does
+      not separate. Three of the five green runs did not use <code>write</code> at all and repaired the file
+      through <code>bash</code> in four or five steps, a short direct route this model had not shown
+      before.</p>
+    </div>
+
+    <div class="callout key">
+      <div class="label">For a dense 27B, GSQ is the better quantisation. It is still a dense 27B.</div>
+      <p>At a 132 s median it is 4.6× behind the 3 B-active MoE of Finding 16 on the same task, and no
+      choice of bits changes how many parameters each token touches.</p>
+    </div>
+
+    <div class="col">
       <h3>Three ways to lose an hour before the first token</h3>
       <p><strong>Stock llama.cpp cannot load it, and will not tell you why.</strong> LM Studio 0.4.20's
       bundled llama.cpp 2.37.0 indexes the file happily, reports it as an ordinary <code>qwen35</code> of
@@ -2021,6 +2087,7 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
           <tr><th>Qwen3.8-35B-A3B Distill <em>gguf, Q2_K</em></th><td class="num">13.84 GB</td><td class="num">16.92 GB <em>meas.</em></td><td class="num">70 %</td><td><span class="pill ok">6/6, fastest here</span></td></tr>
           <tr><th>Qwen3.8-35B-A3B Distill <em>gguf, IQ3_M</em></th><td class="num">16.34 GB</td><td class="num">19.34 GB <em>meas.</em></td><td class="num">81 %</td><td><span class="pill mid">6/6, but touches the 80 % band</span></td></tr>
           <tr><th>Ornith-1.5-35B-A3B <em>gguf, Q2_K</em></th><td class="num">13.09 GB</td><td class="num">16.26 GB <em>meas.</em></td><td class="num">68 %</td><td><span class="pill mid">5/6, slower than the Distill</span></td></tr>
+          <tr><th>Qwen3.8-27B GSQ-RCO <em>gguf, IQ3_S</em></th><td class="num">11.77 GB</td><td class="num">16.98 GB <em>meas.</em></td><td class="num">71 %</td><td><span class="pill mid">5/6, best quant for a dense 27B</span></td></tr>
           <tr><th>Qwen3.8-27B UD-Q4_K_M <em>gguf</em></th><td class="num">16.46 GB</td><td class="num">~20 GB</td><td class="num">83 %</td><td><span class="pill bad">same band as the guardrail block</span></td></tr>
           <tr><th>Devstral-Small-2-24B 4-bit</th><td class="num">15.10 GB</td><td class="num">—</td><td class="num">—</td><td><span class="pill bad">worse ceiling</span></td></tr>
           <tr><th>Qwen3.6-35B-A3B 3-bit</th><td class="num">15.20 GB</td><td class="num">19.29 GB <em>meas.</em></td><td class="num">80 %</td><td><span class="pill bad">3/6 under load</span></td></tr>
@@ -2268,6 +2335,9 @@ Darwin Kernel Version 25.5.0 / OS version 25F80</code></pre>
     <p>Finding 17 is from a further session on the same machine and build:
     <code>bartowski/Ornith-1.5-35B-A3B-GGUF</code> at <code>Q2_K</code>, and the Distill's <code>Q2_K</code>
     again, each in both reasoning modes.</p>
+    <p>The GSQ point in Finding 15 is from a session after that: <code>ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF</code>
+    at <code>IQ3_S</code>, same build, reasoning off. The vague-prompt cells in Findings 16 and 17 are
+    reproducible with <code>bench/vagueprobe.py</code>.</p>
     <p>The harness was a ~180-line Python loop talking directly to the OpenAI-compatible endpoint,
     validating tool arguments against the declared schema itself. It exists because the coding agent had
     to be ruled out as a variable — which, twice, it turned out to be. The repair task used the same loop

@@ -2,7 +2,7 @@
 
 *Field notes — Apple M5 Pro, 24 GB, macOS 26.6 (25G72), LM Studio 0.4.20, OpenCode 1.18.9*
 
-Eleven models, 798 tool calls, six to twelve identical runs per configuration. Every model aced the
+Eleven models, 860 tool calls, six to twelve identical runs per configuration. Every model aced the
 task in isolation. What separated them was a five-thousand-token system prompt — the
 thing every real coding agent sends. Along the way: one kernel panic, a flickering
 desktop as the only warning macOS ever gave, and sixteen confident conclusions I had to
@@ -1064,6 +1064,51 @@ critical path in both directions. `PQ2_0` simply dominates for 0.52 GB.
 > nothing. It becomes a good deal exactly where 14.25 GB does not fit — a 16 GB Mac, where
 > the IQ4_XS row is not an option at all. Same shape as Finding 14's verdict about edge0,
 > one bit-width down.
+
+### A third point on the axis: GSQ at 3 bits, and what it says about ternary
+
+A later session added the point between ternary and 4-bit:
+[Qwen3.8-27B-GSQ-RCO](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF) from ISTA-DASLab.
+GSQ learns the per-coordinate grid assignments and group scales by Gumbel-Softmax relaxation; RCO
+then picks a standard llama.cpp type for each tensor under a total size budget. The result is a
+stock GGUF — no fork, no special build — at `IQ3_S`, nominally 3.44 bits per weight and 11.77 GB.
+
+Prefill is independent of the reasoning mode, so the throughput comparison holds across all three:
+
+| | ternary `PQ2_0` | GSQ-RCO `IQ3_S` | UD-IQ4_XS |
+|---|---:|---:|---:|
+| Bits per weight | 2.13 | ~3.44 | ~4.25 |
+| Weights | 7.21 GB | 11.77 GB | 14.25 GB |
+| Prefill, 7k prompt | 103.9 tok/s | **285.1 tok/s** | 251.6 tok/s |
+| Decode | 23.6 tok/s | 17.4 tok/s | 16.9 tok/s |
+
+**This settles the objection from the other side.** A conventional-format 3-bit build prefills as
+fast as the 4-bit one — faster, in fact — while the ternary build at 2.13 bits sits at well under
+half. Prefill does not degrade smoothly with bit-width; it falls off a cliff at ternary. The penalty
+belongs to the ternary matmul path, which is what the packing comparison above concluded with only
+two points. (The IQ4_XS figure came through LM Studio's llama.cpp and the others through other
+builds, so the 285 against 252 is not a meaningful gap; the gap to 104 is.)
+
+`repair_task` ran with the reasoning block off, so the comparison row is the IQ4_XS without it:
+
+| | GSQ-RCO `IQ3_S` | UD-IQ4_XS |
+|---|---:|---:|
+| Verified | 5 / 6 | 11 / 12 |
+| Median | 132.4 s | 113.0 s |
+| Median of green runs | **79.1 s** | 111.2 s |
+| Wired peak | **16.98 GB** at 32k | 17.11 GB at 16k |
+| Vague prompt | 12 / 12 | — |
+
+**GSQ keeps what it promises.** 2.48 GB less on disk, twice the context at slightly less wired
+memory, and the green runs are faster. Its one red run is not a quantisation artefact: thirty
+`bash` calls, no write, the file untouched, the step limit at 15/22 — the exact signature of the
+IQ4_XS's own failure, on the same base model. One in six against one in twelve does not separate.
+Three of the five green runs did not use `write` at all and repaired the file through `bash` in four
+or five steps, a short direct route this model had not shown before.
+
+> **For a dense 27B, GSQ is the better quantisation. It is still a dense 27B.** At a 132 s median it
+> is 4.6× behind the 3 B-active MoE of Finding 16 on the same task, and no choice of bits changes
+> how many parameters each token touches.
 
 ### Three ways to lose an hour before the first token
 
