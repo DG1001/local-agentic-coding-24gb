@@ -122,8 +122,9 @@ completion; with `output: 4096` on 24k it finished in one pass with zero compact
 larger model.** Hermes Agent with its 17 default toolsets could not finish this task with
 any model tested; the same gpt-oss that scores 6/6 through a two-tool harness left the
 file with a `SyntaxError`. Restricted to `-t terminal,file` it finished in 2:28.
-Qwen3.5-9B failed either way. A local general-purpose agent on 24 GB therefore costs a
-21B-class model at ~67 % of memory, not the 39 % a 9B would have needed.
+Qwen3.5-9B failed either way. A dense Qwen3.8-27B at 3.4 bits later took the full default
+set without trouble — 22/22 in 3:36, tests untouched — so the threshold sits between a 21B MoE
+and a 27B dense model. On 24 GB that costs 79 % of memory at Hermes' required 64k context.
 
 The one insight that saves time before any download: **file size is the wrong number.**
 Two similarly sized models can differ by 8× in KV cache cost. There is a tool for that

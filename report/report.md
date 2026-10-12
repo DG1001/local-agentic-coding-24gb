@@ -512,6 +512,32 @@ model buys you holds for a coding agent like OpenCode — not for this.
 > contrast — fails at 17 toolsets, 22/22 at two — is large enough that the direction is not
 > in doubt. The Qwen3.5-9B result is a single failed run and should be read as such.
 
+### A later point: a dense 27B takes the full surface
+
+That bound was drawn from 21B-class models. A later session put Qwen3.8-27B — the GSQ-RCO
+`IQ3_S` build from Finding 15, reasoning off, 64k context as Hermes asks — through the same
+Hermes v0.19.1, the same task and the same 15-minute watchdog, single runs as above:
+
+| Configuration | Model | Result |
+|---|---|---|
+| Hermes, `-t terminal,file` | Qwen3.8-27B GSQ | **22/22 in 6:53**, tests untouched |
+| **Hermes default, 17 toolsets** | Qwen3.8-27B GSQ | **22/22 in 3:36**, tests untouched |
+
+The surface that left gpt-oss's file with a `SyntaxError` did not trouble it: an eight-line diff,
+and a closing summary that names all three bugs correctly. The faster time with more tools is
+single-run noise and nothing more.
+
+So the threshold this finding describes is real, and it sits between gpt-oss-20b and this model.
+What it consists of, one data point does not separate: gpt-oss is an MoE with ~3.6 B active
+parameters, this is 27 B dense and a generation newer. Total size, active parameters or training —
+three candidates.
+
+> **The practical consequence moves.** A local general-purpose agent on 24 GB no longer has to be
+> cut down to two toolsets: a dense 27B at 3.4 bits runs Hermes' full default at 64k, peaking at
+> **18.87 GB (79 %)**. That is right at the line Findings 8 and 10 draw, so nothing else should be
+> loaded alongside — and it is slow, because Hermes' ~5,000-token system prompt goes through all 27 B
+> parameters on every turn.
+
 ### A related trap: PARALLEL multiplies your KV cache
 
 While setting this up I raised gpt-oss to 65,536 context because Hermes asks for at least

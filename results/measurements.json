@@ -1741,7 +1741,27 @@
       }
     },
     "conclusion": "Reducing the tool surface fixed gpt-oss (17 toolsets: failed; 2 toolsets: 22/22 in 2:28) but not Qwen3.5-9B, which failed either way. So tool width explains the 21B model's behaviour, not the 9B's. The same model solves this task 5/6 through a two-tool custom harness with terse schemas - Hermes' terminal+file toolsets still carry more functions and a much larger system prompt. For a local general-purpose agent on 24 GB the entry ticket is a 21B-class model at ~67 % memory, not the 39 % a 9B would have cost.",
-    "caveat": "One run per configuration, not six. Enough to show the direction, not to quantify it. The gpt-oss contrast (fails at 17 toolsets, 22/22 at 2) is large enough that the direction is not in doubt; the Qwen3.5-9B result is a single failed run and should be read as such."
+    "caveat": "One run per configuration, not six. Enough to show the direction, not to quantify it. The gpt-oss contrast (fails at 17 toolsets, 22/22 at 2) is large enough that the direction is not in doubt; the Qwen3.5-9B result is a single failed run and should be read as such.",
+    "later_point_dense_27b": {
+      "_comment": "A later session: Qwen3.8-27B GSQ-RCO IQ3_S (the Finding 15 GSQ row), reasoning off, 65,536 context as Hermes asks, through the same Hermes Agent v0.19.1, same task, same 15-minute watchdog. Single runs, as above.",
+      "model": "Qwen3.8-27B GSQ-RCO IQ3_S, llama.cpp build 10210",
+      "terminal_file": {
+        "result": "passed",
+        "tests_after": "22/22 passing",
+        "wall_s": 413,
+        "tests_untouched": true
+      },
+      "default_17_toolsets": {
+        "result": "passed",
+        "tests_after": "22/22 passing",
+        "wall_s": 216,
+        "tests_untouched": true,
+        "note": "eight-line diff; the closing summary names all three bugs correctly"
+      },
+      "wired_peak_gb": 18.87,
+      "wired_peak_pct": 79,
+      "reading": "The tool-breadth threshold sits between gpt-oss-20b (21B MoE, ~3.6B active) and a dense 27B a generation newer. One data point cannot separate total size, active parameters and training as the cause. The faster default run is single-run noise."
+    }
   },
   "opencode_through_the_real_tool_surface": {
     "_comment": "Qwen3.8-27B driven by OpenCode 1.18.15 (6 tools) instead of the 2-tool harness. Same repair task. Two runs, differing only in the context/output split of the model config.",

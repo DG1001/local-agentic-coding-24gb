@@ -1048,6 +1048,41 @@ mlx_lm.server --model &lt;path&gt; --port 8890 \
         result is a single failed run and should be read as such.</p>
       </div>
 
+      <h3>A later point: a dense 27B takes the full surface</h3>
+      <p>That bound was drawn from 21B-class models. A later session put Qwen3.8-27B — the GSQ-RCO
+      <code>IQ3_S</code> build from Finding 15, reasoning off, 64k context as Hermes asks — through the
+      same Hermes v0.19.1, the same task and the same 15-minute watchdog, single runs as above:</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>The configuration that broke gpt-oss-20b, one model size up</caption>
+        <thead><tr><th>Configuration</th><th>Model</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Hermes, <code>-t terminal,file</code></td><td>Qwen3.8-27B GSQ</td><td><span class="pill ok">22/22 in 6:53</span> tests untouched</td></tr>
+          <tr><td><strong>Hermes default, 17 toolsets</strong></td><td>Qwen3.8-27B GSQ</td><td><span class="pill ok">22/22 in 3:36</span> tests untouched</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>The surface that left gpt-oss's file with a <code>SyntaxError</code> did not trouble it: an
+      eight-line diff, and a closing summary that names all three bugs correctly. The faster time with
+      more tools is single-run noise and nothing more.</p>
+      <p>So the threshold this finding describes is real, and it sits between gpt-oss-20b and this model.
+      What it consists of, one data point does not separate: gpt-oss is an MoE with ~3.6 B active
+      parameters, this is 27 B dense and a generation newer. Total size, active parameters or training —
+      three candidates.</p>
+
+      <div class="callout key">
+        <div class="label">The practical consequence moves</div>
+        <p>A local general-purpose agent on 24 GB no longer has to be cut down to two toolsets: a dense
+        27B at 3.4 bits runs Hermes' full default at 64k, peaking at <strong>18.87 GB (79 %)</strong>.
+        That is right at the line Findings 8 and 10 draw, so nothing else should be loaded alongside —
+        and it is slow, because Hermes' ~5,000-token system prompt goes through all 27 B parameters on
+        every turn.</p>
+      </div>
+
       <h3>A related trap: PARALLEL multiplies your KV cache</h3>
       <p>While setting this up I raised gpt-oss to 65,536 context because Hermes asks for at least 64K
       — and the desktop started flickering again. Wired had reached <strong>18.75 GB (78 %)</strong>.</p>
